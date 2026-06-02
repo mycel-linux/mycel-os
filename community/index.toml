@@ -1,0 +1,11 @@
+# MycelOS Community Overlay Index
+#
+# This file lists community-maintained package overlays.
+# Add your overlay by opening a pull request — see CONTRIBUTING.md.
+
+# [[overlays]]
+# name        = "example-packages"
+# repo        = "github:username/mycel-packages"
+# description = "example overlay — replace with your own"
+# maintainer  = "username"
+# verified    = false
