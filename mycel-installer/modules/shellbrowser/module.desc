@@ -1,0 +1,4 @@
+type:       viewmodule
+name:       shellbrowser
+interface:  qtquickplugin
+load:       ShellBrowser.qml

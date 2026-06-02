@@ -1,0 +1,38 @@
+[system]
+hostname = "mycelbox"
+timezone = "UTC"
+locale = "en_US.UTF-8"
+kernel = "stable"
+immutable = true
+
+[boot]
+timeout = 3
+cmdline = ["quiet"]
+
+[packages]
+install = [
+  "neovim",
+  "git",
+  "curl",
+  "wget",
+  "btop",
+  "fastfetch",
+]
+lock = []
+
+[overlays]
+sources = []
+
+[desktop]
+environment = "none"
+
+[services]
+enable = [
+  "NetworkManager",
+]
+
+[[users]]
+name = "user"
+shell = "bash"
+groups = ["wheel", "audio", "video", "input", "storage"]
+password_hash = ""

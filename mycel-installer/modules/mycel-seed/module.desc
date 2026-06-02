@@ -1,0 +1,4 @@
+type:       jobmodule
+name:       mycel-seed
+interface:  python
+script:     main.py

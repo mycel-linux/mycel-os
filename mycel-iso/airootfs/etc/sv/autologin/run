@@ -1,0 +1,2 @@
+#!/bin/sh
+exec chpst -u live env HOME=/home/live USER=live sway

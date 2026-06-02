@@ -1,0 +1,1 @@
+/home/tghrl/mycelos/fessus/fessus-init/target/debug/fessus-init: /home/tghrl/mycelos/fessus/fessus-init/src/angles.rs /home/tghrl/mycelos/fessus/fessus-init/src/main.rs /home/tghrl/mycelos/fessus/fessus-init/src/parser.rs /home/tghrl/mycelos/fessus/fessus-init/src/schema.rs /home/tghrl/mycelos/fessus/fessus-init/src/templates.rs

@@ -1,0 +1,56 @@
+[fessus]
+accent_color = "#3F549E"
+theme = "dark"
+font = "Inter"
+icon_theme = "Papirus-Dark"
+cursor_theme = "Bibata-Modern-Classic"
+cursor_size = 24
+wallpaper = "/usr/share/mycel/wallpaper.jpg"
+
+[window]
+gaps_inner = 8
+gaps_outer = 4
+border = 2
+
+[bar]
+position = "top"
+clock_format = "%H:%M"
+show_battery = true
+show_network = true
+show_bluetooth = true
+show_tray = true
+
+[launcher]
+provider = "wofi"
+
+[notifications]
+position = "top-right"
+timeout = 5000
+max_visible = 3
+
+[radial]
+corner = "bottom-left"
+pinned = [
+  "firefox",
+  "thunar",
+  "kitty",
+  "mousepad",
+  "mpv",
+]
+
+[workspaces]
+count = 8
+
+[keybindings]
+mod = "Super"
+terminal = "kitty"
+
+[autostart]
+apps = [
+  "blueman-applet",
+  "nm-applet",
+]
+
+[hardware]
+touchscreen = false
+auto_rotate = false

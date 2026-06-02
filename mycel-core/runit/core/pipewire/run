@@ -1,0 +1,3 @@
+#!/bin/sh
+# Run as the session user, not root
+exec chpst -u "${USER:-user}" pipewire

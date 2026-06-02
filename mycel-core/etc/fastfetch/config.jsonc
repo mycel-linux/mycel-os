@@ -1,0 +1,97 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "source": "/home/tghrl/mycelos/mycel-core/assets/logo_ascii.txt",
+    "type": "file",
+    "color": {
+      "1": "38;2;63;84;158"
+    },
+    "padding": {
+      "top": 1,
+      "left": 2,
+      "right": 4
+    }
+  },
+  "display": {
+    "separator": "  →  ",
+    "color": {
+      "keys": "38;2;63;84;158",
+      "title": "38;2;63;84;158",
+      "separator": "90"
+    }
+  },
+  "modules": [
+    {
+      "type": "custom",
+      "format": "  MycelOS"
+    },
+    {
+      "type": "custom",
+      "format": " ─────────────────────────"
+    },
+    {
+      "type": "os",
+      "key": "  OS",
+      "format": "MycelOS"
+    },
+    {
+      "type": "kernel",
+      "key": "  Kernel"
+    },
+    {
+      "type": "uptime",
+      "key": "  Uptime"
+    },
+    {
+      "type": "packages",
+      "key": "  Packages"
+    },
+    {
+      "type": "shell",
+      "key": "  Shell"
+    },
+    {
+      "type": "display",
+      "key": "  Display"
+    },
+    {
+      "type": "wm",
+      "key": "  WM"
+    },
+    {
+      "type": "terminal",
+      "key": "  Terminal"
+    },
+    {
+      "type": "cpu",
+      "key": "  CPU"
+    },
+    {
+      "type": "gpu",
+      "key": "  GPU"
+    },
+    {
+      "type": "memory",
+      "key": "  Memory"
+    },
+    {
+      "type": "disk",
+      "key": "  Disk",
+      "folders": "/"
+    },
+    {
+      "type": "command",
+      "key": "  Generation",
+      "shell": "mycel active --gen 2>/dev/null || echo 'unknown'"
+    },
+    {
+      "type": "custom",
+      "format": ""
+    },
+    {
+      "type": "colors",
+      "paddingLeft": 1,
+      "symbol": "circle"
+    }
+  ]
+}

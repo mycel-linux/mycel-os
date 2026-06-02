@@ -1,0 +1,72 @@
+[system]
+hostname = "mycelbox"
+timezone = "UTC"
+locale = "en_US.UTF-8"
+kernel = "performance"
+immutable = true
+
+[boot]
+timeout = 3
+cmdline = ["quiet", "splash"]
+
+[packages]
+install = [
+  # browser
+  "firefox",
+  # terminal
+  "kitty",
+  # file manager
+  "thunar",
+  # text editor
+  "mousepad",
+  # media
+  "mpv",
+  "imv",
+  # documents
+  "zathura",
+  "zathura-pdf-mupdf",
+  # system
+  "btop",
+  "fastfetch",
+  "xarchiver",
+  # bluetooth
+  "blueman",
+  # calculator
+  "qalculate-gtk",
+  # screen recording
+  "wf-recorder",
+  # screenshots
+  "grim",
+  "slurp",
+  # clipboard
+  "cliphist",
+  "wl-clipboard",
+  # utilities
+  "git",
+  "curl",
+  "wget",
+]
+lock = []
+
+[overlays]
+sources = [
+  "github:mycel-linux/community",
+]
+
+[desktop]
+environment = "fessus"
+
+[services]
+enable = [
+  "pipewire",
+  "wireplumber",
+  "NetworkManager",
+  "bluetooth",
+  "cronie",
+]
+
+[[users]]
+name = "user"
+shell = "bash"
+groups = ["wheel", "audio", "video", "input", "storage"]
+password_hash = ""
