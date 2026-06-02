@@ -1,0 +1,47 @@
+name: Verify recipes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'community/recipes/**.myc'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'community/recipes/**.myc'
+
+jobs:
+  verify:
+    name: Verify .myc recipes
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl tools
+        run: sudo apt-get install -y musl-tools
+
+      - name: Build mycel-pkg
+        run: |
+          cd mycel-pkg
+          cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Verify all recipes
+        run: |
+          BINARY="mycel-pkg/target/x86_64-unknown-linux-musl/release/mycel-pkg"
+          FAILED=0
+
+          for recipe in community/recipes/*.myc; do
+            echo "── verifying $recipe"
+            if ! "$BINARY" verify "$recipe"; then
+              echo "FAILED: $recipe"
+              FAILED=1
+            fi
+          done
+
+          exit $FAILED

@@ -1,0 +1,83 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-mycel:
+    name: Build mycel CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl tools
+        run: sudo apt-get install -y musl-tools
+
+      - name: Build
+        run: |
+          cd mycel
+          cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mycel
+          path: mycel/target/x86_64-unknown-linux-musl/release/mycel
+
+  build-mycel-pkg:
+    name: Build mycel-pkg
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl tools
+        run: sudo apt-get install -y musl-tools
+
+      - name: Build
+        run: |
+          cd mycel-pkg
+          cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mycel-pkg
+          path: mycel-pkg/target/x86_64-unknown-linux-musl/release/mycel-pkg
+
+  build-fessus-init:
+    name: Build fessus-init
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl tools
+        run: sudo apt-get install -y musl-tools
+
+      - name: Build
+        run: |
+          cd fessus/fessus-init
+          cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fessus-init
+          path: fessus/fessus-init/target/x86_64-unknown-linux-musl/release/fessus-init
