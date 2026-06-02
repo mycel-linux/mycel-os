@@ -16,7 +16,7 @@ pub fn extract(archive_path: &str, dest: &str) -> Result<()> {
         extract_tar_bz2(archive_path, dest)
     } else if name.ends_with(".tar.zst") {
         extract_tar_zst(archive_path, dest)
-    } else if name.ends_with(".tar.xz") {
+    } else if name.ends_with(".tar.xz") || name.ends_with(".txz") {
         extract_tar_xz(archive_path, dest)
     } else if name.ends_with(".zip") {
         bail!("zip extraction not yet implemented — please use tar archives")
