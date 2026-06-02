@@ -1,1 +1,5 @@
 mycel-iso/build/
+mycel-iso/bootstrap.log
+target/
+*/target/
+**/target/
