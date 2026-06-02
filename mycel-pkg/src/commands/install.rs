@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -40,8 +40,8 @@ pub fn run(package: &str) -> Result<()> {
     let src_dir = format!("{}/src", tmp);
     extract::extract(&archive, &src_dir)?;
 
-    // Find the actual extracted directory (archives often have a subdirectory)
-    let work_dir = find_work_dir(&src_dir)?;
+    // Use src_dir as the root — recipes specify full paths from archive root
+    let work_dir = src_dir.clone();
 
     // Compile if source package
     if let Some(build) = &recipe.build {
@@ -59,7 +59,8 @@ pub fn run(package: &str) -> Result<()> {
             let (from, to) = parse_binary_entry(bin, &work_dir);
             let dest = format!("{}/bin/{}", prefix, to);
             fs::create_dir_all(format!("{}/bin", prefix))?;
-            fs::copy(&from, &dest)?;
+            fs::copy(&from, &dest)
+                .with_context(|| format!("could not copy '{}' — check the 'from' path in the recipe", from))?;
             fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))?;
             println!("  {} {}", "→".blue(), dest.dimmed());
             installed_files.push(dest);
