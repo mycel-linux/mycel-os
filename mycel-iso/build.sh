@@ -20,7 +20,7 @@ die()   { echo -e "${RED}!!${NC} $1"; exit 1; }
 check_deps() {
     step "checking dependencies..."
     local missing=()
-    for dep in nix xorriso mksquashfs dracut limine; do
+    for dep in xorriso mksquashfs dracut limine; do
         command -v "$dep" &>/dev/null || missing+=("$dep")
     done
     if [ ${#missing[@]} -gt 0 ]; then
@@ -29,26 +29,11 @@ check_deps() {
     ok "all dependencies found"
 }
 
-# ─── Build live rootfs via Nix ────────────────────────────────────────────────
+# ─── Bootstrap rootfs ─────────────────────────────────────────────────────────
 build_rootfs() {
-    step "building live rootfs with nix..."
-    mkdir -p "$ROOTFS_DIR"
-
-    # Build the live package environment
-    nix-build "$SCRIPT_DIR/live.nix" -o "$BUILD_DIR/live-env" \
-        --show-trace 2>&1 | tail -5
-
-    # Populate rootfs from the Nix closure
-    mkdir -p "$ROOTFS_DIR"/{bin,sbin,etc,usr,var,proc,sys,dev,run,tmp,nix,home,root,boot}
-    chmod 1777 "$ROOTFS_DIR/tmp"
-
-    # Copy Nix store paths into rootfs
-    cp -a /nix/store "$ROOTFS_DIR/nix/"
-
-    # Link binaries from the live env profile
-    ln -sfn "$BUILD_DIR/live-env/bin" "$ROOTFS_DIR/usr/bin-extra"
-
-    ok "rootfs built"
+    step "bootstrapping rootfs..."
+    bash "$SCRIPT_DIR/bootstrap.sh"
+    ok "rootfs ready"
 }
 
 # ─── Overlay live environment files ───────────────────────────────────────────
@@ -177,8 +162,6 @@ main() {
 
     check_deps
     build_rootfs
-    setup_live
-    create_squashfs
     build_boot
     setup_iso_dir
     build_iso

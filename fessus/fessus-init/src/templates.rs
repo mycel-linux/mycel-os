@@ -37,8 +37,7 @@ fn write(home: &str, rel_path: &str, content: &str) -> Result<()> {
 // ─── Sway ────────────────────────────────────────────────────────────────────
 
 fn sway(c: &FessusConfig) -> String {
-    let mod_key = c.keybindings.mod_raw.as_deref()
-        .unwrap_or(&c.keybindings.mod_key);
+    let mod_key = &c.keybindings.mod_key;
 
     let launcher_cmd = match c.launcher.provider.as_str() {
         "anyrun" => "anyrun",

@@ -67,9 +67,8 @@ pub struct Workspaces {
 
 #[derive(Deserialize, Debug)]
 pub struct Keybindings {
-    pub mod_key:  String,
     #[serde(rename = "mod")]
-    pub mod_raw:  Option<String>,
+    pub mod_key:  String,
     pub terminal: String,
 }
 
