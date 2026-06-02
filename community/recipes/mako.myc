@@ -1,0 +1,27 @@
+[package]
+name        = "mako"
+version     = "1.9.0"
+description = "Lightweight Wayland notification daemon"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "github-release"
+repo = "emersion/mako"
+tag  = "v1.9.0"
+asset = "mako-1.9.0.tar.gz"
+
+[build]
+system   = "meson"
+commands = [
+  "meson setup build --prefix=/usr",
+  "ninja -C build",
+  "ninja -C build install",
+]
+
+[install]
+binaries = [
+  { from = "build/mako",      to = "mako"      },
+  { from = "build/makoctl",   to = "makoctl"   },
+]

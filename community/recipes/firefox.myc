@@ -1,0 +1,26 @@
+[package]
+name        = "firefox"
+version     = "137.0"
+description = "Fast, private web browser by Mozilla"
+license     = "MPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://releases.mozilla.org/pub/firefox/releases/137.0/linux-x86_64/en-US/firefox-137.0.tar.bz2"
+checksum = "sha256:PLACEHOLDER_update_with_sha256sum_of_the_tarball"
+
+[install]
+prefix  = "/opt"
+binaries = [
+  { from = "firefox/firefox", to = "firefox" }
+]
+script = "install.sh"
+
+[desktop]
+name       = "Firefox"
+exec       = "firefox %u"
+icon       = "firefox"
+categories = ["Network", "WebBrowser"]
+mime       = ["text/html", "text/xml", "application/xhtml+xml", "x-scheme-handler/http", "x-scheme-handler/https"]

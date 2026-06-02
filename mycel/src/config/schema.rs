@@ -1,6 +1,6 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MycelConfig {
     pub system:   System,
     pub boot:     Boot,
@@ -11,7 +11,7 @@ pub struct MycelConfig {
     pub users:    Vec<User>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct System {
     pub hostname:  String,
     pub timezone:  String,
@@ -22,34 +22,34 @@ pub struct System {
     pub keep_generations: Option<u64>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Boot {
     pub timeout: u32,
     pub cmdline: Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Packages {
     pub install: Vec<String>,
     pub lock:    Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Overlays {
     pub sources: Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Desktop {
     pub environment: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Services {
     pub enable: Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct User {
     pub name:          String,
     pub shell:         String,

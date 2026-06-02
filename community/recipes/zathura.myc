@@ -1,0 +1,31 @@
+[package]
+name        = "zathura"
+version     = "0.5.8"
+description = "Minimalist keyboard-driven document viewer"
+license     = "Zlib"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://pwmt.org/projects/zathura/download/zathura-0.5.8.tar.xz"
+
+[build]
+system   = "meson"
+commands = [
+  "meson setup build --prefix=/usr",
+  "ninja -C build",
+  "ninja -C build install",
+]
+
+[install]
+binaries = [
+  { from = "build/zathura", to = "zathura" }
+]
+
+[desktop]
+name       = "Zathura"
+exec       = "zathura %f"
+icon       = "org.pwmt.zathura"
+categories = ["Office", "Viewer"]
+mime       = ["application/pdf"]

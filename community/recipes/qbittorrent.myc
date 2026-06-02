@@ -1,0 +1,33 @@
+[package]
+name        = "qbittorrent"
+version     = "5.0.3"
+description = "Free and open source BitTorrent client"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "qbittorrent/qBittorrent"
+tag      = "release-5.0.3"
+asset    = "qbittorrent-5.0.3.tar.xz"
+
+[build]
+system   = "cmake"
+commands = [
+  "cmake -B build -DCMAKE_INSTALL_PREFIX=/usr -DGUI=ON",
+  "cmake --build build -j$(nproc)",
+  "cmake --install build",
+]
+
+[install]
+binaries = [
+  { from = "build/qbittorrent", to = "qbittorrent" }
+]
+
+[desktop]
+name       = "qBittorrent"
+exec       = "qbittorrent %U"
+icon       = "qbittorrent"
+categories = ["Network", "FileTransfer"]
+mime       = ["application/x-bittorrent", "x-scheme-handler/magnet"]

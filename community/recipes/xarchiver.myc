@@ -1,0 +1,33 @@
+[package]
+name        = "xarchiver"
+version     = "0.5.4.21"
+description = "GTK archive manager"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "ib/xarchiver"
+tag      = "0.5.4.21"
+asset    = "xarchiver-0.5.4.21.tar.gz"
+
+[build]
+system   = "script"
+commands = [
+  "./configure --prefix=/usr",
+  "make -j$(nproc)",
+  "make install",
+]
+
+[install]
+binaries = [
+  { from = "src/xarchiver", to = "xarchiver" }
+]
+
+[desktop]
+name       = "Xarchiver"
+exec       = "xarchiver %F"
+icon       = "xarchiver"
+categories = ["Utility", "Archiving", "Compression"]
+mime       = ["application/zip", "application/x-tar", "application/x-bzip2", "application/x-xz", "application/zstd"]

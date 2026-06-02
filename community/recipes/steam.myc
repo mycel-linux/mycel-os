@@ -1,0 +1,30 @@
+[package]
+name        = "steam"
+version     = "1.0.0.81"
+description = "Valve's digital game distribution platform"
+license     = "Proprietary"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://repo.steampowered.com/steam/archive/precise/steam_latest.tar.gz"
+
+[install]
+script = "install.sh"
+binaries = [
+  { from = "steam/steam.sh", to = "steam" }
+]
+icons = [
+  { src = "steam/public/steam_logo.png", name = "steam", size = 256 }
+]
+
+[desktop]
+name       = "Steam"
+exec       = "steam %U"
+icon       = "steam"
+categories = ["Game"]
+mime       = ["x-scheme-handler/steam", "x-scheme-handler/steamlink"]
+
+[dependencies]
+runtime = ["lib32-glibc", "lib32-gcc-libs", "lib32-libx11"]

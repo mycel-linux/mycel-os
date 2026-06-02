@@ -19,7 +19,7 @@ pub fn extract(archive_path: &str, dest: &str) -> Result<()> {
     } else if name.ends_with(".tar.xz") || name.ends_with(".txz") {
         extract_tar_xz(archive_path, dest)
     } else if name.ends_with(".zip") {
-        bail!("zip extraction not yet implemented — please use tar archives")
+        extract_zip(archive_path, dest)
     } else {
         bail!("unrecognised archive format: {}", name)
     }
@@ -59,6 +59,33 @@ fn extract_tar_xz(path: &str, dest: &str) -> Result<()> {
         .status()?;
     if !status.success() {
         anyhow::bail!("tar failed to extract {}", path);
+    }
+    Ok(())
+}
+
+fn extract_zip(path: &str, dest: &str) -> Result<()> {
+    use std::io;
+    use std::os::unix::fs::PermissionsExt;
+
+    let file = File::open(path)?;
+    let mut archive = zip::ZipArchive::new(file)?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)?;
+        let out_path = Path::new(dest).join(entry.mangled_name());
+
+        if entry.is_dir() {
+            std::fs::create_dir_all(&out_path)?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let mut out_file = File::create(&out_path)?;
+            io::copy(&mut entry, &mut out_file)?;
+            if let Some(mode) = entry.unix_mode() {
+                std::fs::set_permissions(&out_path, std::fs::Permissions::from_mode(mode))?;
+            }
+        }
     }
     Ok(())
 }

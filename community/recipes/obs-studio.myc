@@ -1,0 +1,28 @@
+[package]
+name        = "obs-studio"
+version     = "31.0.2"
+description = "Free and open source streaming and screen recording"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "obsproject/obs-studio"
+tag      = "31.0.2"
+asset    = "obs-studio-31.0.2-ubuntu2404-x86_64.tar.gz"
+
+[install]
+binaries = [
+  { from = "obs-studio/bin/64bit/obs",       to = "obs"       },
+  { from = "obs-studio/bin/64bit/obs-ffmpeg-mux", to = "obs-ffmpeg-mux" },
+]
+
+[desktop]
+name       = "OBS Studio"
+exec       = "obs"
+icon       = "com.obsproject.Studio"
+categories = ["AudioVideo", "Recorder"]
+
+[dependencies]
+runtime = ["ffmpeg", "libxcomposite", "libxinerama", "pipewire"]

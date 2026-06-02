@@ -29,7 +29,7 @@ pub fn run(gen_only: bool) -> Result<()> {
         })
         .unwrap_or_else(|_| "unknown".to_string());
 
-    let services: Vec<String> = fs::read_dir("/var/service")
+    let services: Vec<String> = fs::read_dir("/run/service")
         .map(|entries| {
             entries
                 .filter_map(|e| e.ok())

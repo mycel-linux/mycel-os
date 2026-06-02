@@ -1,0 +1,29 @@
+[package]
+name        = "wine"
+version     = "9.0"
+description = "Compatibility layer for running Windows applications on Linux"
+license     = "LGPL-2.1"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://dl.winehq.org/wine/source/9.0/wine-9.0.tar.xz"
+
+[build]
+system   = "script"
+commands = [
+  "./configure --prefix=/usr --enable-win64",
+  "make -j$(nproc)",
+  "make install",
+]
+
+[install]
+binaries = [
+  { from = "wine64", to = "wine64" },
+  { from = "wine",   to = "wine"   },
+]
+
+[dependencies]
+build   = ["gcc-multilib", "libx11-devel", "freetype-devel"]
+runtime = ["lib32-glibc", "freetype2", "libx11"]

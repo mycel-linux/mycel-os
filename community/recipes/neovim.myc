@@ -1,0 +1,21 @@
+[package]
+name        = "neovim"
+version     = "0.10.2"
+description = "Hyperextensible Vim-based text editor"
+license     = "Apache-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "neovim/neovim"
+tag      = "v0.10.2"
+asset    = "nvim-linux-x86_64.tar.gz"
+
+[install]
+binaries = [
+  { from = "nvim-linux-x86_64/bin/nvim", to = "nvim" }
+]
+
+[hooks]
+post_install = "update-alternatives --install /usr/bin/vim vim /usr/bin/nvim 60 2>/dev/null || true"

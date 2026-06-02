@@ -1,0 +1,18 @@
+[package]
+name        = "procs"
+version     = "0.14.8"
+description = "Modern replacement for ps with colour and search"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "dalance/procs"
+tag      = "v0.14.8"
+asset    = "procs-v0.14.8-x86_64-linux.zip"
+
+[install]
+binaries = [
+  { from = "procs", to = "procs" }
+]

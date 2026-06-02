@@ -1,0 +1,25 @@
+[package]
+name        = "kdenlive"
+version     = "24.12.3"
+description = "Free and open source video editor"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "KDE/kdenlive"
+tag      = "v24.12.3"
+asset    = "kdenlive-24.12.3.AppImage"
+
+[install]
+binaries = [
+  { from = "kdenlive-24.12.3.AppImage", to = "kdenlive" }
+]
+
+[desktop]
+name       = "Kdenlive"
+exec       = "kdenlive %F"
+icon       = "kdenlive"
+categories = ["AudioVideo", "Video", "VideoEditing"]
+mime       = ["video/mp4", "video/x-matroska", "video/quicktime"]

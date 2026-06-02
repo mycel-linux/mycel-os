@@ -1,0 +1,18 @@
+[package]
+name        = "bat"
+version     = "0.24.0"
+description = "cat clone with syntax highlighting and Git integration"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "sharkdp/bat"
+tag      = "v0.24.0"
+asset    = "bat-v0.24.0-x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "bat-v0.24.0-x86_64-unknown-linux-gnu/bat", to = "bat" }
+]

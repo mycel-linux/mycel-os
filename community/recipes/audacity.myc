@@ -1,0 +1,25 @@
+[package]
+name        = "audacity"
+version     = "3.7.3"
+description = "Free, open source, cross-platform audio editor"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "audacity/audacity"
+tag      = "Audacity-3.7.3"
+asset    = "audacity-linux-3.7.3-x64.AppImage"
+
+[install]
+binaries = [
+  { from = "audacity-linux-3.7.3-x64.AppImage", to = "audacity" }
+]
+
+[desktop]
+name       = "Audacity"
+exec       = "audacity %F"
+icon       = "audacity"
+categories = ["AudioVideo", "Audio", "AudioEditing"]
+mime       = ["audio/wav", "audio/mp3", "audio/ogg", "audio/flac"]

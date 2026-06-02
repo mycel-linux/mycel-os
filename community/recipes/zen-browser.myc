@@ -1,0 +1,29 @@
+[package]
+name        = "zen-browser"
+version     = "1.0.2-b.5"
+description = "Beautiful, privacy-focused Firefox fork"
+license     = "MPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "zen-browser/desktop"
+tag      = "1.0.2-b.5"
+asset    = "zen.linux-x86_64.tar.bz2"
+
+[install]
+prefix  = "/opt"
+binaries = [
+  { from = "zen/zen", to = "zen" }
+]
+icons = [
+  { src = "zen/browser/chrome/icons/default/default128.png", name = "zen-browser", size = 128 }
+]
+
+[desktop]
+name       = "Zen Browser"
+exec       = "zen %u"
+icon       = "zen-browser"
+categories = ["Network", "WebBrowser"]
+mime       = ["text/html", "x-scheme-handler/http", "x-scheme-handler/https"]

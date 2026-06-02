@@ -46,6 +46,9 @@ enum Commands {
         gen: bool,
     },
 
+    /// Check system health — services, config, DB, disk space
+    Doctor,
+
     /// Show the diff between two generations
     Diff {
         gen1: String,
@@ -76,6 +79,13 @@ enum Commands {
     /// Remove a package pin
     Unlock {
         package: String,
+    },
+
+    /// Install packages immediately and record them in mycel.toml
+    Get {
+        /// Packages to install
+        #[arg(required = true)]
+        packages: Vec<String>,
     },
 
     /// Drop into an ephemeral shell with the given packages
@@ -114,12 +124,14 @@ fn main() -> Result<()> {
         Commands::Edit { target }      => commands::edit::run(target.as_deref()),
         Commands::Network | Commands::Grid  => commands::network::run(),
         Commands::Active { gen }       => commands::active::run(gen),
+        Commands::Doctor               => commands::doctor::run(),
         Commands::Diff { gen1, gen2 }  => commands::diff::run(&gen1, &gen2),
         Commands::Purge | Commands::Gc => commands::purge::run(),
         Commands::Isolate { generation } => commands::isolate::run(&generation),
         Commands::Release { generation } => commands::release::run(&generation),
         Commands::Lock { package }     => commands::lock::run(&package),
         Commands::Unlock { package }   => commands::unlock::run(&package),
+        Commands::Get   { packages }   => commands::get::run(&packages),
         Commands::Spore { packages }   => commands::spore::run(&packages),
         Commands::Spread { export }    => commands::spread::run(&export),
         Commands::Guide { topic }      => commands::guide::run(topic.as_deref()),

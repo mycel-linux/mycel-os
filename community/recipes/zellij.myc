@@ -1,0 +1,18 @@
+[package]
+name        = "zellij"
+version     = "0.41.2"
+description = "Terminal workspace and multiplexer"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "zellij-org/zellij"
+tag      = "v0.41.2"
+asset    = "zellij-x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "zellij", to = "zellij" }
+]

@@ -1,0 +1,31 @@
+[package]
+name        = "thunar"
+version     = "4.20.0"
+description = "Fast and easy-to-use file manager for Xfce"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://archive.xfce.org/src/xfce/thunar/4.20/thunar-4.20.0.tar.bz2"
+
+[build]
+system   = "script"
+commands = [
+  "./configure --prefix=/usr",
+  "make -j$(nproc)",
+  "make install",
+]
+
+[install]
+binaries = [
+  { from = "Thunar/thunar", to = "thunar" }
+]
+
+[desktop]
+name       = "Thunar"
+exec       = "thunar %F"
+icon       = "org.xfce.thunar"
+categories = ["System", "FileManager"]
+mime       = ["inode/directory"]

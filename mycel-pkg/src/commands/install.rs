@@ -8,6 +8,7 @@ use chrono::Utc;
 
 use crate::build::{checksum, download, extract};
 use crate::package::{db, parser, schema::{InstalledPackage, InstalledFiles}};
+use crate::root::system_root;
 
 const TMP_DIR: &str = "/tmp/mycel-pkg";
 
@@ -50,8 +51,9 @@ pub fn run(package: &str) -> Result<()> {
     }
 
     // Install files
+    let root = system_root();
     let mut installed_files: Vec<String> = vec![];
-    let prefix = recipe.install.prefix.as_deref().unwrap_or("/usr");
+    let prefix = format!("{}{}", root, recipe.install.prefix.as_deref().unwrap_or("/usr"));
 
     // Binaries
     if let Some(binaries) = &recipe.install.binaries {
@@ -72,8 +74,8 @@ pub fn run(package: &str) -> Result<()> {
         for icon in icons {
             let src = format!("{}/{}", work_dir, icon.src);
             let dest = format!(
-                "/usr/share/icons/hicolor/{}x{}/apps/{}",
-                icon.size, icon.size, icon.name
+                "{}/usr/share/icons/hicolor/{}x{}/apps/{}",
+                root, icon.size, icon.size, icon.name
             );
             fs::create_dir_all(Path::new(&dest).parent().unwrap())?;
             if Path::new(&src).exists() {
@@ -86,8 +88,8 @@ pub fn run(package: &str) -> Result<()> {
 
     // .desktop file
     if let Some(desktop) = &recipe.desktop {
-        let dest = format!("/usr/share/applications/{}.desktop", name);
-        fs::create_dir_all("/usr/share/applications")?;
+        let dest = format!("{}/usr/share/applications/{}.desktop", root, name);
+        fs::create_dir_all(format!("{}/usr/share/applications", root))?;
         let content = generate_desktop(name, desktop);
         fs::write(&dest, content)?;
         println!("  {} {}", "→".blue(), dest.dimmed());

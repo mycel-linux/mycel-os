@@ -1,0 +1,24 @@
+[package]
+name        = "bitwarden"
+version     = "2025.1.3"
+description = "Open source password manager"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "bitwarden/clients"
+tag      = "desktop-v2025.1.3"
+asset    = "Bitwarden-2025.1.3-linux-x86_64.AppImage"
+
+[install]
+binaries = [
+  { from = "Bitwarden-2025.1.3-linux-x86_64.AppImage", to = "bitwarden" }
+]
+
+[desktop]
+name       = "Bitwarden"
+exec       = "bitwarden %U"
+icon       = "bitwarden"
+categories = ["Utility", "Security"]

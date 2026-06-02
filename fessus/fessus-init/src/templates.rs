@@ -8,14 +8,20 @@ use crate::schema::FessusConfig;
 pub fn generate_all(config: &FessusConfig) -> Result<()> {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
 
-    write(&home, ".config/sway/config",         &sway(config))?;
+    write(&home, ".config/sway/config",          &sway(config))?;
     write(&home, ".config/waybar/config.jsonc",  &waybar_config(config))?;
     write(&home, ".config/waybar/style.css",     &waybar_style(config))?;
+    write(&home, ".config/waybar/launch.sh",     &waybar_launch())?;
     write(&home, ".config/dunst/dunstrc",        &dunstrc(config))?;
     write(&home, ".config/eww/eww.yuck",         &eww_yuck(config))?;
     write(&home, ".config/eww/eww.scss",         &eww_scss(config))?;
     write(&home, ".config/wofi/config",          &wofi_config(config))?;
     write(&home, ".config/wofi/style.css",       &wofi_style(config))?;
+
+    // Mark launch.sh executable
+    let launch = PathBuf::from(&home).join(".config/waybar/launch.sh");
+    use std::os::unix::fs::PermissionsExt;
+    let _ = fs::set_permissions(&launch, fs::Permissions::from_mode(0o755));
 
     Ok(())
 }
@@ -80,10 +86,11 @@ seat seat0 xcursor_theme {cursor_theme} {cursor_size}
 
 exec_always swaybg -i {wallpaper} -m fill
 exec_always ~/.config/waybar/launch.sh
-exec_always eww daemon && eww open radial
+exec_always eww daemon
 
 {autostart_lines}
 
+# Core bindings
 bindsym $mod+Return exec $term
 bindsym $mod+d exec $launcher
 bindsym $mod+q kill
@@ -92,17 +99,24 @@ bindsym $mod+f fullscreen toggle
 bindsym $mod+v splith
 bindsym $mod+s splitv
 
+# Focus
 bindsym $mod+h focus left
 bindsym $mod+j focus down
 bindsym $mod+k focus up
 bindsym $mod+l focus right
 
+# Move
 bindsym $mod+Shift+h move left
 bindsym $mod+Shift+j move down
 bindsym $mod+Shift+k move up
 bindsym $mod+Shift+l move right
 
-bindsym $mod+Shift+e exec swaymsg exit
+# Session
+bindsym $mod+Shift+e exec wlogout 2>/dev/null || swaymsg exit
+bindsym $mod+Shift+l exec swaylock -f -c 000000
+
+# Radial menu toggle
+bindsym $mod+r exec eww open --toggle radial
 
 {workspace_bindings}
 
@@ -128,6 +142,17 @@ input type:touchpad {{
         autostart_lines = autostart_lines,
         workspace_bindings = workspace_bindings,
     )
+}
+
+// ─── Waybar launch script ────────────────────────────────────────────────────
+
+fn waybar_launch() -> String {
+    r#"#!/bin/sh
+# Kill any existing waybar before relaunching (used by sway reload)
+pkill -x waybar 2>/dev/null
+sleep 0.1
+exec waybar
+"#.to_string()
 }
 
 // ─── Waybar ───────────────────────────────────────────────────────────────────

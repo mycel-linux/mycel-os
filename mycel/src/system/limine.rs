@@ -16,24 +16,24 @@ pub fn write(current_gen: u64, root_dev: &str, keep: u64) -> Result<()> {
     // Current generation — always first, boots @ subvolume (live root)
     conf.push_str(&format!("/MycelOS — Generation {} (current)\n", current_gen));
     conf.push_str("    protocol: linux\n");
-    conf.push_str("    kernel_path: boot():/vmlinuz\n");
+    conf.push_str("    kernel_path: root():/boot/vmlinuz\n");
     conf.push_str(&format!(
         "    cmdline: root={} rootflags=subvol=@ rw quiet splash\n",
         root_dev
     ));
-    conf.push_str("    module_path: boot():/initramfs.img\n\n");
+    conf.push_str("    module_path: root():/boot/initramfs.img\n\n");
 
     // Previous generations — newest first, boot their snapshot subvolume
     for gen in all_gens.iter().rev() {
         if *gen == current_gen { continue; }
         conf.push_str(&format!("/MycelOS — Generation {}\n", gen));
         conf.push_str("    protocol: linux\n");
-        conf.push_str("    kernel_path: boot():/vmlinuz\n");
+        conf.push_str("    kernel_path: root():/boot/vmlinuz\n");
         conf.push_str(&format!(
             "    cmdline: root={} rootflags=subvol=/.snapshots/@gen-{} rw\n",
             root_dev, gen
         ));
-        conf.push_str("    module_path: boot():/initramfs.img\n\n");
+        conf.push_str("    module_path: root():/boot/initramfs.img\n\n");
     }
 
     fs::create_dir_all("/boot")?;
@@ -59,7 +59,7 @@ pub fn set_default(target_gen: u64, root_dev: &str, keep: u64) -> Result<()> {
 
     conf.push_str(&format!("{}\n", label));
     conf.push_str("    protocol: linux\n");
-    conf.push_str("    kernel_path: boot():/vmlinuz\n");
+    conf.push_str("    kernel_path: root():/boot/vmlinuz\n");
     if is_current {
         conf.push_str(&format!(
             "    cmdline: root={} rootflags=subvol=@ rw quiet splash\n",
@@ -71,7 +71,7 @@ pub fn set_default(target_gen: u64, root_dev: &str, keep: u64) -> Result<()> {
             root_dev, target_gen
         ));
     }
-    conf.push_str("    module_path: boot():/initramfs.img\n\n");
+    conf.push_str("    module_path: root():/boot/initramfs.img\n\n");
 
     // All other generations
     for gen in all_gens.iter().rev() {
@@ -84,7 +84,7 @@ pub fn set_default(target_gen: u64, root_dev: &str, keep: u64) -> Result<()> {
         };
         conf.push_str(&format!("{}\n", lbl));
         conf.push_str("    protocol: linux\n");
-        conf.push_str("    kernel_path: boot():/vmlinuz\n");
+        conf.push_str("    kernel_path: root():/boot/vmlinuz\n");
         if is_cur {
             conf.push_str(&format!(
                 "    cmdline: root={} rootflags=subvol=@ rw quiet splash\n",
@@ -96,7 +96,7 @@ pub fn set_default(target_gen: u64, root_dev: &str, keep: u64) -> Result<()> {
                 root_dev, gen
             ));
         }
-        conf.push_str("    module_path: boot():/initramfs.img\n\n");
+        conf.push_str("    module_path: root():/boot/initramfs.img\n\n");
     }
 
     fs::write(LIMINE_CONF, conf)?;

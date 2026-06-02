@@ -1,0 +1,25 @@
+[package]
+name        = "mpv"
+version     = "0.39.0"
+description = "Free and open source media player"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type  = "github-release"
+repo  = "mpv-player/mpv"
+tag   = "v0.39.0"
+asset = "mpv-x86_64-v3-20241117.tar.gz"
+
+[install]
+binaries = [
+  { from = "mpv", to = "mpv" }
+]
+
+[desktop]
+name       = "mpv Media Player"
+exec       = "mpv --player-operation-mode=pseudo-gui -- %U"
+icon       = "mpv"
+categories = ["AudioVideo", "Video", "Audio", "Player"]
+mime       = ["video/mp4", "video/mkv", "video/webm", "audio/mpeg", "audio/ogg"]

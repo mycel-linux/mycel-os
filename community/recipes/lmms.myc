@@ -1,0 +1,27 @@
+[package]
+name        = "lmms"
+version     = "1.2.2"
+description = "Free, open source, cross-platform DAW — Linux MultiMedia Studio"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "LMMS/lmms"
+tag      = "v1.2.2"
+asset    = "lmms-1.2.2-linux-x86_64.AppImage"
+
+[install]
+binaries = [
+  { from = "lmms-1.2.2-linux-x86_64.AppImage", to = "lmms" }
+]
+
+[desktop]
+name       = "LMMS"
+exec       = "lmms"
+icon       = "lmms"
+categories = ["AudioVideo", "Audio", "Sequencer", "Midi"]
+
+[dependencies]
+runtime = ["alsa-lib", "libpulse"]

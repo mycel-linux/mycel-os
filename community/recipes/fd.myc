@@ -1,0 +1,18 @@
+[package]
+name        = "fd"
+version     = "10.2.0"
+description = "Simple, fast alternative to find"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "sharkdp/fd"
+tag      = "v10.2.0"
+asset    = "fd-v10.2.0-x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "fd-v10.2.0-x86_64-unknown-linux-gnu/fd", to = "fd" }
+]

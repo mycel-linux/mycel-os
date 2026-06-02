@@ -1,0 +1,24 @@
+[package]
+name        = "vesktop"
+version     = "1.5.4"
+description = "Custom Discord client with Vencord built in — better performance and privacy"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "Vencord/Vesktop"
+tag      = "v1.5.4"
+asset    = "vesktop-1.5.4.AppImage"
+
+[install]
+binaries = [
+  { from = "vesktop-1.5.4.AppImage", to = "vesktop" }
+]
+
+[desktop]
+name       = "Vesktop"
+exec       = "vesktop"
+icon       = "vesktop"
+categories = ["Network", "InstantMessaging"]

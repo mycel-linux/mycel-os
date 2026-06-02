@@ -1,0 +1,27 @@
+[package]
+name        = "blender"
+version     = "4.3.2"
+description = "Free and open source 3D creation suite"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://mirror.clarkson.edu/blender/release/Blender4.3/blender-4.3.2-linux-x64.tar.xz"
+
+[install]
+prefix  = "/opt"
+binaries = [
+  { from = "blender-4.3.2-linux-x64/blender", to = "blender" }
+]
+icons = [
+  { src = "blender-4.3.2-linux-x64/blender.svg", name = "blender", size = 256 }
+]
+
+[desktop]
+name       = "Blender"
+exec       = "blender %f"
+icon       = "blender"
+categories = ["Graphics", "3DGraphics"]
+mime       = ["application/x-blender"]

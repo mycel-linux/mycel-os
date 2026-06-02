@@ -1,0 +1,31 @@
+[package]
+name        = "mousepad"
+version     = "0.6.3"
+description = "Simple text editor for Xfce"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://archive.xfce.org/src/apps/mousepad/0.6/mousepad-0.6.3.tar.bz2"
+
+[build]
+system   = "script"
+commands = [
+  "./configure --prefix=/usr",
+  "make -j$(nproc)",
+  "make install",
+]
+
+[install]
+binaries = [
+  { from = "mousepad", to = "mousepad" }
+]
+
+[desktop]
+name       = "Mousepad"
+exec       = "mousepad %F"
+icon       = "org.xfce.mousepad"
+categories = ["Utility", "TextEditor"]
+mime       = ["text/plain"]

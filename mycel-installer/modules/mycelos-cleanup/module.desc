@@ -1,0 +1,4 @@
+type:       jobmodule
+name:       mycelos-cleanup
+interface:  python
+script:     main.py

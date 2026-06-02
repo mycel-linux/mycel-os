@@ -10,7 +10,7 @@ arch        = "x86_64"
 type     = "github-release"
 repo     = "aristocratos/btop"
 tag      = "v1.4.7"
-asset    = "btop-x86_64-unknown-linux-musl.tar.gz"
+asset    = "btop-x86_64-unknown-linux-gnu.tar.gz"
 checksum = "sha256:5099054dd6a101bd12eb6ff3702a9a6a3f57aaa27923a0da478ae5b517faf335"
 
 [install]

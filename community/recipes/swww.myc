@@ -1,0 +1,19 @@
+[package]
+name        = "swww"
+version     = "0.9.5"
+description = "Efficient animated Wayland wallpaper daemon"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "LGFae/swww"
+tag      = "v0.9.5"
+asset    = "swww-x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "swww",        to = "swww"        },
+  { from = "swww-daemon", to = "swww-daemon" },
+]

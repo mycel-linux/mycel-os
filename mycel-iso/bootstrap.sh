@@ -3,7 +3,7 @@
 #
 # Builds the live filesystem from scratch.
 # Arch Linux packages are used as a BUILD-TIME binary source only.
-# The final rootfs runs on runit + mycel-pkg — no Arch tooling is present.
+# The final rootfs runs on s6 + mycel-pkg — no Arch tooling is present.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,8 +13,6 @@ RECIPES="$SCRIPT_DIR/../community/recipes"
 MYCEL_PKG="$SCRIPT_DIR/../mycel-pkg/target/release/mycel-pkg"
 FESSUS_INIT="$SCRIPT_DIR/../fessus/fessus-init/target/release/fessus-init"
 
-BUSYBOX_URL="https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox"
-MUSL_URL="https://musl.libc.org/releases/musl-1.2.5.tar.gz"
 ARCH_MIRROR="https://geo.mirror.pkgbuild.com/extra/os/x86_64"
 
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
@@ -27,7 +25,7 @@ info() { echo -e "   → $1"; }
 
 check_deps() {
     step "checking build dependencies..."
-    for dep in curl tar zstd mksquashfs gcc make; do
+    for dep in curl tar zstd mksquashfs; do
         command -v "$dep" &>/dev/null || die "missing: $dep"
     done
     [ -x "$MYCEL_PKG" ]   || die "mycel-pkg not built — run: cd mycel-pkg && cargo build --release"
@@ -45,7 +43,7 @@ create_skeleton() {
     mkdir -p "$ROOT/usr/share/applications" "$ROOT/usr/share/icons"
     mkdir -p "$ROOT/usr/share/fonts" "$ROOT/usr/share/mycel"
     mkdir -p "$ROOT/usr/include" "$ROOT/usr/local"
-    mkdir -p "$ROOT/etc/sv" "$ROOT/etc/runit"
+    mkdir -p "$ROOT/etc/s6/sv"
     mkdir -p "$ROOT/etc/mycel" "$ROOT/etc/fastfetch" "$ROOT/etc/sway"
     mkdir -p "$ROOT/etc/waybar" "$ROOT/etc/dunst"
     mkdir -p "$ROOT/var/lib/mycel/packages" "$ROOT/var/log" "$ROOT/var/run" "$ROOT/var/tmp"
@@ -58,42 +56,7 @@ create_skeleton() {
     ok "directory tree ready"
 }
 
-# ─── 2. Busybox ───────────────────────────────────────────────────────────────
-
-install_busybox() {
-    step "installing busybox..."
-    curl -sL "$BUSYBOX_URL" -o "$ROOT/bin/busybox"
-    chmod +x "$ROOT/bin/busybox"
-
-    for applet in sh ash cat cp mv rm ls mkdir rmdir ln chmod chown \
-                  grep sed awk find xargs tar gzip gunzip zstd \
-                  mount umount ps kill df du free uname hostname \
-                  date echo printf sleep env head tail wc sort uniq \
-                  cut tr tee dd ip ping; do
-        ln -sf busybox "$ROOT/bin/$applet" 2>/dev/null || true
-    done
-    ok "busybox ready"
-}
-
-# ─── 3. musl libc ─────────────────────────────────────────────────────────────
-
-install_musl() {
-    step "building musl libc from source..."
-    local build="/tmp/musl-build"
-    rm -rf "$build" && mkdir -p "$build"
-
-    curl -sL "$MUSL_URL" | tar -xz -C "$build" --strip-components=1
-    cd "$build"
-    ./configure --prefix="$ROOT/usr" --syslibdir="$ROOT/lib" --silent
-    make -j"$(nproc)" install >/dev/null 2>&1
-    cd "$SCRIPT_DIR"
-
-    ln -sf ../usr/lib/libc.so "$ROOT/lib/ld-musl-x86_64.so.1" 2>/dev/null || true
-    rm -rf "$build"
-    ok "musl ready"
-}
-
-# ─── 4. Arch package helper ───────────────────────────────────────────────────
+# ─── 2. Arch package helper ───────────────────────────────────────────────────
 # Downloads an Arch Linux package and extracts it into the rootfs.
 # This is a BUILD-TIME operation only — pacman is never installed in the rootfs.
 
@@ -175,7 +138,7 @@ fetch_arch_pkg() {
 
 install_s6() {
     info "installing s6 supervision suite..."
-    for pkg in skalibs execline s6 s6-rc; do
+    for pkg in skalibs execline s6 s6-rc s6-linux-init; do
         fetch_arch_pkg "$pkg"
     done
     ok "s6 installed"
@@ -187,11 +150,38 @@ install_system_packages() {
     step "fetching system packages (build-time binary source)..."
     setup_arch_db
 
-    # s6 supervision suite
+    # s6 supervision suite + PID 1 frontend
     install_s6
 
+    # Kernel
+    for pkg in linux-lts linux-firmware; do
+        fetch_arch_pkg "$pkg"
+    done
+
+    # glibc — the one and only C runtime
+    for pkg in glibc lib32-glibc; do
+        fetch_arch_pkg "$pkg"
+    done
+
+    # Core userland (replaces busybox with real glibc-linked tools)
+    for pkg in bash coreutils grep sed gawk findutils \
+                util-linux procps-ng iproute2 iputils \
+                tar gzip bzip2 xz zstd file less which; do
+        fetch_arch_pkg "$pkg"
+    done
+
     # Core system
-    for pkg in eudev dbus seatd shadow; do
+    for pkg in eudev dbus seatd shadow pam; do
+        fetch_arch_pkg "$pkg"
+    done
+
+    # Basic userland tools
+    for pkg in nano curl git wget; do
+        fetch_arch_pkg "$pkg"
+    done
+
+    # Bluetooth
+    for pkg in bluez bluez-utils; do
         fetch_arch_pkg "$pkg"
     done
 
@@ -211,7 +201,7 @@ install_system_packages() {
         fetch_arch_pkg "$pkg"
     done
 
-    # Terminal and launcher
+    # Terminal
     for pkg in kitty; do
         fetch_arch_pkg "$pkg"
     done
@@ -283,6 +273,7 @@ audio:x:18:live
 video:x:28:live
 input:x:97:live
 seat:x:99:live
+bluetooth:x:85:live
 live:x:1000:
 EOF
 
@@ -298,45 +289,206 @@ EOF
     ok "config files written"
 }
 
-# ─── 8. runit init tree ───────────────────────────────────────────────────────
+# ─── Helper: run a command inside the rootfs chroot ──────────────────────────
 
-install_runit() {
-    step "installing runit init tree..."
+chroot_run() {
+    mount -o bind /proc    "$ROOT/proc"
+    mount -o bind /sys     "$ROOT/sys"
+    mount -o bind /dev     "$ROOT/dev"
+    mount -o bind /dev/pts "$ROOT/dev/pts"
 
-    cp -aT "$SCRIPT_DIR/../mycel-core/runit" "$ROOT/etc/sv/"
+    chroot "$ROOT" "$@"
+    local rc=$?
 
-    # s6 init script — PID 1
-    cat > "$ROOT/sbin/init" <<'EOF'
-#!/bin/sh
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
-mount -t devtmpfs devtmpfs /dev
-mount -t devpts devpts /dev/pts
-mount -t tmpfs tmpfs /run
-mkdir -p /run/service /run/s6 /run/dbus /dev/shm
-chmod 1777 /dev/shm
-exec < /dev/console > /dev/console 2>&1
-exec s6-svscan /run/service
-EOF
-    chmod +x "$ROOT/sbin/init"
+    umount "$ROOT/dev/pts" 2>/dev/null || true
+    umount "$ROOT/dev"     2>/dev/null || true
+    umount "$ROOT/sys"     2>/dev/null || true
+    umount "$ROOT/proc"    2>/dev/null || true
 
-    # Copy s6 service definitions
-    mkdir -p "$ROOT/etc/s6/sv"
-    cp -aT "$SCRIPT_DIR/../mycel-core/s6" "$ROOT/etc/s6/sv/"
-
-    # Enable core services at boot
-    mkdir -p "$ROOT/run/service"
-    for svc in dbus udevd seatd pipewire wireplumber NetworkManager autologin; do
-        [ -d "$ROOT/etc/s6/sv/core/$svc" ] && \
-            ln -sf "/etc/s6/sv/core/$svc" "$ROOT/etc/s6/sv/$svc" 2>/dev/null || true
-        [ -d "$ROOT/etc/s6/sv/optional/$svc" ] && \
-            ln -sf "/etc/s6/sv/optional/$svc" "$ROOT/etc/s6/sv/$svc" 2>/dev/null || true
-    done
-
-    ok "runit init tree ready"
+    return $rc
 }
 
-# ─── 9. MycelOS tools ─────────────────────────────────────────────────────────
+# ─── 8. s6 init tree ─────────────────────────────────────────────────────────
+
+install_s6_tree() {
+    step "installing s6 init tree..."
+
+    # Copy s6-rc service source definitions
+    mkdir -p "$ROOT/etc/s6-rc"
+    cp -aT "$SCRIPT_DIR/../mycel-core/s6-rc/source" "$ROOT/etc/s6-rc/source"
+
+    # Compile the s6-rc database inside the rootfs (needs the s6-rc binary)
+    chroot_run s6-rc-compile /etc/s6-rc/compiled /etc/s6-rc/source \
+        || die "s6-rc-compile failed — is s6-rc installed in the rootfs?"
+
+    # Set up s6-linux-init as PID 1
+    # s6-linux-init-maker generates the init tree at /etc/s6-linux-init
+    chroot_run s6-linux-init-maker \
+        -c /etc/s6-linux-init \
+        -s /run/s6-linux-init \
+        -b /usr/bin \
+        -u nobody \
+        -L \
+        /etc/s6-linux-init \
+        || die "s6-linux-init-maker failed"
+
+    # Install our stage 2 / shutdown scripts over the defaults
+    install -Dm755 "$SCRIPT_DIR/../mycel-core/s6-linux-init/scripts/rc.init" \
+        "$ROOT/etc/s6-linux-init/scripts/rc.init"
+    install -Dm755 "$SCRIPT_DIR/../mycel-core/s6-linux-init/scripts/rc.shutdown" \
+        "$ROOT/etc/s6-linux-init/scripts/rc.shutdown"
+
+    # /sbin/init → the generated s6-linux-init binary
+    ln -sf /etc/s6-linux-init/init "$ROOT/sbin/init"
+
+    ok "s6 init tree ready"
+}
+
+# ─── 9. Seed mycel-pkg package database ──────────────────────────────────────
+# Writes a minimal .toml record for every Arch package that bootstrap installed
+# so that `mycel switch` on first boot sees them as already present and doesn't
+# try to reinstall everything.
+
+seed_package_db() {
+    step "seeding mycel-pkg package database..."
+
+    local db="$ROOT/var/lib/mycel/packages"
+    mkdir -p "$db"
+
+    local now
+    now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Walk the Arch package DB desc files we downloaded during build
+    find "$PKG_CACHE/arch-db" -name "desc" | while read -r desc; do
+        local name version
+        name=$(awk '/^%NAME%/{getline; print; exit}' "$desc")
+        version=$(awk '/^%VERSION%/{getline; print; exit}' "$desc")
+
+        [ -z "$name" ] || [ -z "$version" ] && continue
+
+        # Only seed packages that are actually present in the rootfs
+        [ -f "$ROOT/usr/bin/$name" ] || \
+        [ -f "$ROOT/usr/sbin/$name" ] || \
+        [ -f "$ROOT/usr/lib/$name" ] || \
+        [ -d "$ROOT/usr/share/$name" ] || \
+        [ -f "$ROOT/usr/bin/${name}d" ] || \
+        grep -qx "$name" "$PKG_CACHE/installed.list" 2>/dev/null \
+            || continue
+
+        cat > "$db/${name}.toml" <<TOML
+name         = "${name}"
+version      = "${version}"
+installed_at = "${now}"
+
+[files]
+installed = []
+TOML
+    done
+
+    # Also seed from an explicit list of packages we know we installed
+    local installed=(
+        bash coreutils grep sed gawk findutils util-linux procps-ng
+        iproute2 iputils tar gzip bzip2 xz zstd file less which
+        glibc eudev dbus seatd shadow pam
+        skalibs execline s6 s6-rc s6-linux-init
+        linux-lts linux-firmware
+        nano curl git wget
+        bluez bluez-utils
+        pipewire pipewire-audio wireplumber
+        networkmanager
+        sway swaybg swaylock wlroots waybar dunst wofi kitty
+        wl-clipboard grim slurp cliphist wf-recorder
+        xdg-desktop-portal xdg-utils
+        firefox thunar mousepad mpv imv
+        zathura xarchiver blueman qalculate-gtk
+        inter-font papirus-icon-theme
+        calamares
+    )
+
+    for pkg in "${installed[@]}"; do
+        local record="$db/${pkg}.toml"
+        [ -f "$record" ] && continue   # already seeded from arch-db
+
+        # Try to find the version in the arch-db
+        local version="0.0.0"
+        local desc_file
+        desc_file=$(find "$PKG_CACHE/arch-db" -name "desc" 2>/dev/null \
+            | xargs grep -l "^${pkg}$" 2>/dev/null | head -1)
+        if [ -n "$desc_file" ]; then
+            version=$(awk '/^%VERSION%/{getline; print; exit}' "$desc_file")
+        fi
+
+        cat > "$record" <<TOML
+name         = "${pkg}"
+version      = "${version:-0.0.0}"
+installed_at = "${now}"
+
+[files]
+installed = []
+TOML
+    done
+
+    local count
+    count=$(find "$db" -name "*.toml" | wc -l)
+    ok "seeded ${count} packages"
+}
+
+# ─── 11. /etc/skel — default files for new user home directories ─────────────
+
+install_skel() {
+    step "installing /etc/skel..."
+
+    mkdir -p "$ROOT/etc/skel/.config"
+
+    cat > "$ROOT/etc/skel/.bashrc" <<'EOF'
+# ~/.bashrc — sourced for interactive non-login shells
+
+# If not interactive, do nothing
+[[ $- != *i* ]] && return
+
+# Prompt
+PS1='\[\e[1;34m\]\u@\h\[\e[0m\]:\[\e[1;36m\]\w\[\e[0m\]\$ '
+
+# Aliases
+alias ls='ls --color=auto'
+alias ll='ls -lah --color=auto'
+alias la='ls -A --color=auto'
+alias grep='grep --color=auto'
+alias diff='diff --color=auto'
+
+# Handy shortcuts
+alias mycel-log='journalctl -xe 2>/dev/null || tail -f /var/log/messages'
+
+# Load zoxide if installed
+command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init bash)"
+
+# Load starship if installed
+command -v starship >/dev/null 2>&1 && eval "$(starship init bash)"
+EOF
+
+    cat > "$ROOT/etc/skel/.bash_profile" <<'EOF'
+# ~/.bash_profile — sourced for login shells
+[[ -f ~/.bashrc ]] && source ~/.bashrc
+EOF
+
+    cat > "$ROOT/etc/skel/.profile" <<'EOF'
+# ~/.profile — POSIX-compatible login shell config
+export PATH="$HOME/.local/bin:$PATH"
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_CACHE_HOME="$HOME/.cache"
+EOF
+
+    # Copy the live fessus.toml as the default desktop config for new users
+    if [ -f "$SCRIPT_DIR/airootfs/home/live/.config/fessus.toml" ]; then
+        cp "$SCRIPT_DIR/airootfs/home/live/.config/fessus.toml" \
+            "$ROOT/etc/skel/.config/fessus.toml"
+    fi
+
+    ok "/etc/skel ready"
+}
+
+# ─── 12. MycelOS tools ────────────────────────────────────────────────────────
 
 install_mycel_tools() {
     step "installing MycelOS tools..."
@@ -348,7 +500,7 @@ install_mycel_tools() {
     ok "mycel, mycel-pkg, fessus-init installed"
 }
 
-# ─── 10. Assets, configs, live user ──────────────────────────────────────────
+# ─── 13. Assets, configs, live user ──────────────────────────────────────────
 
 install_assets_and_user() {
     step "installing assets, configs and live user..."
@@ -365,7 +517,7 @@ install_assets_and_user() {
     sed -i 's|/home/tghrl/mycelos/mycel-core/assets/||g' \
         "$ROOT/etc/fastfetch/config.jsonc"
 
-    # Airootfs overlay (live fessus.toml, mycel.toml, sv/autologin etc.)
+    # Airootfs overlay (live fessus.toml, mycel.toml, s6/autologin etc.)
     cp -aT "$SCRIPT_DIR/airootfs" "$ROOT/"
 
     # Pre-generate FessusDE configs for the live user
@@ -376,17 +528,31 @@ install_assets_and_user() {
     ok "assets and live user ready"
 }
 
-# ─── 11. Squashfs ─────────────────────────────────────────────────────────────
+# ─── 11. Calamares installer config ──────────────────────────────────────────
 
-create_squashfs() {
-    step "compressing rootfs into squashfs..."
-    mkdir -p "$SCRIPT_DIR/build/iso/MycelOS"
+install_calamares_config() {
+    step "installing Calamares installer configuration..."
 
-    mksquashfs "$ROOT" "$SCRIPT_DIR/build/iso/MycelOS/airootfs.sfs" \
-        -comp zstd -Xcompression-level 15 -noappend -e boot \
-        2>&1 | tail -3
+    local cal_etc="$ROOT/etc/calamares"
+    mkdir -p "$cal_etc/modules" "$cal_etc/branding"
 
-    ok "squashfs ready ($(du -sh "$SCRIPT_DIR/build/iso/MycelOS/airootfs.sfs" | cut -f1))"
+    cp "$SCRIPT_DIR/../mycel-installer/settings.conf" "$cal_etc/"
+
+    for conf in "$SCRIPT_DIR/../mycel-installer/module-configs/"*.conf; do
+        cp "$conf" "$cal_etc/modules/"
+    done
+
+    cp -aT "$SCRIPT_DIR/../mycel-installer/branding/mycel" \
+        "$cal_etc/branding/mycel"
+
+    # Custom modules go where Calamares looks for Python job modules
+    local mod_dir="$ROOT/usr/lib/calamares/modules"
+    mkdir -p "$mod_dir"
+    for mod in "$SCRIPT_DIR/../mycel-installer/modules/"*/; do
+        cp -aT "$mod" "$mod_dir/$(basename "$mod")"
+    done
+
+    ok "Calamares config installed"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -397,20 +563,20 @@ main() {
     echo "  ─────────────────"
     echo "  Building live rootfs from scratch."
     echo "  Arch packages used as build-time binary source only."
-    echo "  Final system runs on runit + mycel-pkg — no foreign tooling."
+    echo "  Final system runs on s6 + mycel-pkg — no foreign tooling."
     echo ""
 
     check_deps
     create_skeleton
-    install_busybox
-    install_musl
     create_etc
     install_system_packages
     install_myc_packages
-    install_runit
+    install_s6_tree
+    install_skel
+    seed_package_db
     install_mycel_tools
     install_assets_and_user
-    create_squashfs
+    install_calamares_config
 
     echo ""
     ok "bootstrap complete — run build.sh to create the ISO"

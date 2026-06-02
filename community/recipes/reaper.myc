@@ -1,0 +1,31 @@
+[package]
+name        = "reaper"
+version     = "7.26"
+description = "Professional digital audio workstation by Cockos"
+license     = "Proprietary"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://www.reaper.fm/files/7.x/reaper726_linux_x86_64.tar.gz"
+
+[install]
+prefix  = "/opt"
+script  = "install-reaper.sh"
+binaries = [
+  { from = "reaper_linux_x86_64/REAPER/reaper", to = "reaper" }
+]
+icons = [
+  { src = "reaper_linux_x86_64/REAPER/Resources/main.png", name = "reaper", size = 256 }
+]
+
+[desktop]
+name       = "REAPER"
+exec       = "reaper %F"
+icon       = "reaper"
+categories = ["AudioVideo", "Audio", "Sequencer"]
+mime       = ["audio/x-reaper-project"]
+
+[dependencies]
+runtime = ["alsa-lib", "gtk3", "libxcb"]

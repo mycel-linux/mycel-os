@@ -1,7 +1,7 @@
 import libcalamares
 import os
 
-MYCEL_TOML_PATH = "/etc/mycel.toml"
+MYCEL_TOML_SUFFIX = "etc/mycel.toml"
 
 TEMPLATE = """\
 [system]
@@ -61,7 +61,7 @@ enable = [
 [[users]]
 name = "{username}"
 shell = "{shell}"
-groups = ["wheel", "audio", "video", "input", "storage"]
+groups = ["wheel", "audio", "video", "input", "seat", "storage"]
 password_hash = "{password_hash}"
 """
 
@@ -69,15 +69,29 @@ password_hash = "{password_hash}"
 def run():
     gs = libcalamares.globalStorage
 
-    hostname      = gs.value("hostname") or "mycelbox"
-    timezone      = gs.value("locationRegion", "UTC") + "/" + gs.value("locationZone", "")
-    locale        = gs.value("localeConf", {}).get("LANG", "en_US.UTF-8")
-    browser       = gs.value("selectedBrowser") or "firefox"
-    shell         = gs.value("selectedShell") or "bash"
-    username      = gs.value("username") or "user"
-    password_hash = gs.value("passwordHash") or ""
+    root = gs.value("rootMountPoint") or "/mnt"
 
-    timezone = timezone.strip("/")
+    hostname = gs.value("hostname") or "mycelbox"
+
+    region = gs.value("locationRegion") or "UTC"
+    zone   = gs.value("locationZone")   or ""
+    timezone = (region + "/" + zone).strip("/") if zone else region
+
+    locale_conf = gs.value("localeConf") or {}
+    locale      = locale_conf.get("LANG", "en_US.UTF-8")
+
+    browser = gs.value("selectedBrowser") or "firefox"
+    shell   = gs.value("selectedShell")   or "bash"
+
+    # Calamares stores created users as a list of dicts
+    users = gs.value("users") or []
+    if users:
+        user          = users[0]
+        username      = user.get("username", "user")
+        password_hash = user.get("cryptedPassword", "")
+    else:
+        username      = "user"
+        password_hash = ""
 
     content = TEMPLATE.format(
         hostname=hostname,
@@ -89,8 +103,9 @@ def run():
         password_hash=password_hash,
     )
 
-    os.makedirs(os.path.dirname(MYCEL_TOML_PATH), exist_ok=True)
-    with open(MYCEL_TOML_PATH, "w") as f:
+    dest = os.path.join(root, MYCEL_TOML_SUFFIX)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "w") as f:
         f.write(content)
 
     return None

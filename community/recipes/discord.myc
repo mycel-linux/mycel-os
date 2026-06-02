@@ -1,0 +1,26 @@
+[package]
+name        = "discord"
+version     = "0.0.70"
+description = "All-in-one voice, video and text chat"
+license     = "Proprietary"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://dl.discordapp.net/apps/linux/0.0.70/discord-0.0.70.tar.gz"
+
+[install]
+prefix  = "/opt"
+binaries = [
+  { from = "Discord/discord", to = "discord" }
+]
+icons = [
+  { src = "Discord/discord.png", name = "discord", size = 256 }
+]
+
+[desktop]
+name       = "Discord"
+exec       = "discord"
+icon       = "discord"
+categories = ["Network", "InstantMessaging"]

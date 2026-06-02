@@ -1,0 +1,23 @@
+[package]
+name        = "inkscape"
+version     = "1.4"
+description = "Professional vector graphics editor"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://media.inkscape.org/dl/resources/file/Inkscape-1.4_2024-10-11_b67496f-x86_64.AppImage"
+
+[install]
+binaries = [
+  { from = "Inkscape-1.4_2024-10-11_b67496f-x86_64.AppImage", to = "inkscape" }
+]
+
+[desktop]
+name       = "Inkscape"
+exec       = "inkscape %F"
+icon       = "inkscape"
+categories = ["Graphics", "Vector"]
+mime       = ["image/svg+xml", "application/pdf"]

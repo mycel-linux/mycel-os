@@ -1,0 +1,18 @@
+[package]
+name        = "dust"
+version     = "1.1.1"
+description = "Intuitive du — shows disk usage as a tree"
+license     = "Apache-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "bootandy/dust"
+tag      = "v1.1.1"
+asset    = "dust-v1.1.1-x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "dust-v1.1.1-x86_64-unknown-linux-gnu/dust", to = "dust" }
+]

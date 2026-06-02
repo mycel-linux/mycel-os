@@ -1,0 +1,26 @@
+[package]
+name        = "zathura-pdf-mupdf"
+version     = "0.4.3"
+description = "MuPDF PDF backend plugin for Zathura"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://pwmt.org/projects/zathura-pdf-mupdf/download/zathura-pdf-mupdf-0.4.3.tar.xz"
+
+[build]
+system   = "meson"
+commands = [
+  "meson setup build --prefix=/usr",
+  "ninja -C build",
+  "ninja -C build install",
+]
+
+[install]
+script = "install.sh"
+
+[dependencies]
+runtime  = ["zathura", "mupdf"]
+build    = ["mupdf-devel", "zathura-devel"]

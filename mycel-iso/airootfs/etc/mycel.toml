@@ -66,7 +66,7 @@ enable = [
 ]
 
 [[users]]
-name = "user"
+name = "live"
 shell = "bash"
-groups = ["wheel", "audio", "video", "input", "storage"]
+groups = ["wheel", "audio", "video", "input", "seat", "storage", "bluetooth"]
 password_hash = ""

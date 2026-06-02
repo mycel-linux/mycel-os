@@ -1,0 +1,12 @@
+#!/bin/sh
+# Shutdown — called by s6-linux-init when the system is halting or rebooting.
+# Brings down all services cleanly before the kernel powers off.
+
+# Bring down the default bundle (and everything that depends on it)
+s6-rc -l /run/s6-rc -Da change default 2>/dev/null || true
+
+# Save entropy seed for next boot
+mkdir -p /var/lib/misc
+dd if=/dev/urandom of=/var/lib/misc/random-seed bs=512 count=1 2>/dev/null || true
+
+sync

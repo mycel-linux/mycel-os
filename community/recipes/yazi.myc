@@ -1,0 +1,19 @@
+[package]
+name        = "yazi"
+version     = "0.4.2"
+description = "Blazing fast terminal file manager written in Rust"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "sxyazi/yazi"
+tag      = "v0.4.2"
+asset    = "yazi-x86_64-unknown-linux-gnu.zip"
+
+[install]
+binaries = [
+  { from = "yazi-x86_64-unknown-linux-gnu/yazi", to = "yazi" },
+  { from = "yazi-x86_64-unknown-linux-gnu/ya",   to = "ya"   },
+]

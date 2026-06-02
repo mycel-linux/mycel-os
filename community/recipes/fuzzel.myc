@@ -1,0 +1,24 @@
+[package]
+name        = "fuzzel"
+version     = "1.11.0"
+description = "Wayland-native application launcher"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://codeberg.org/dnkl/fuzzel/archive/1.11.0.tar.gz"
+
+[build]
+system   = "meson"
+commands = [
+  "meson setup build --prefix=/usr -Denable-cairo=enabled",
+  "ninja -C build",
+  "ninja -C build install",
+]
+
+[install]
+binaries = [
+  { from = "build/fuzzel", to = "fuzzel" }
+]

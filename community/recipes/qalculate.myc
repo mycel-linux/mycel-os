@@ -1,0 +1,33 @@
+[package]
+name        = "qalculate-gtk"
+version     = "5.3.1"
+description = "Powerful and easy to use desktop calculator"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "Qalculate/qalculate-gtk"
+tag      = "v5.3.1"
+asset    = "qalculate-gtk-5.3.1.tar.gz"
+
+[build]
+system   = "script"
+commands = [
+  "./configure --prefix=/usr",
+  "make -j$(nproc)",
+  "make install",
+]
+
+[install]
+binaries = [
+  { from = "qalculate-gtk", to = "qalculate-gtk" },
+  { from = "qalc",          to = "qalc"          },
+]
+
+[desktop]
+name       = "Qalculate!"
+exec       = "qalculate-gtk"
+icon       = "qalculate-gtk"
+categories = ["Utility", "Calculator"]

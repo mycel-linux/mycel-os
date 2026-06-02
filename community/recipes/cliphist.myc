@@ -1,0 +1,18 @@
+[package]
+name        = "cliphist"
+version     = "0.6.1"
+description = "Wayland clipboard history manager"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "sentriz/cliphist"
+tag      = "v0.6.1"
+asset    = "v0.6.1_linux_amd64"
+
+[install]
+binaries = [
+  { from = "cliphist", to = "cliphist" }
+]

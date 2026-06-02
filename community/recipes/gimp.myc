@@ -1,0 +1,25 @@
+[package]
+name        = "gimp"
+version     = "3.0.0"
+description = "GNU Image Manipulation Program"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "GNOME/gimp"
+tag      = "GIMP_3_0_0"
+asset    = "GIMP-3.0.0-x86_64.AppImage"
+
+[install]
+binaries = [
+  { from = "GIMP-3.0.0-x86_64.AppImage", to = "gimp" }
+]
+
+[desktop]
+name       = "GIMP"
+exec       = "gimp %U"
+icon       = "gimp"
+categories = ["Graphics", "Raster"]
+mime       = ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"]

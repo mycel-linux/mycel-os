@@ -1,0 +1,33 @@
+[package]
+name        = "imv"
+version     = "4.5.0"
+description = "Fast image viewer for Wayland"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type  = "github-release"
+repo  = "eXeC64/imv"
+tag   = "v4.5.0"
+asset = "imv-4.5.0.tar.gz"
+
+[build]
+system   = "meson"
+commands = [
+  "meson setup build --prefix=/usr -Dwindows=wayland",
+  "ninja -C build",
+  "ninja -C build install",
+]
+
+[install]
+binaries = [
+  { from = "build/imv", to = "imv" }
+]
+
+[desktop]
+name       = "imv"
+exec       = "imv %F"
+icon       = "imv"
+categories = ["Graphics", "Viewer"]
+mime       = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"]

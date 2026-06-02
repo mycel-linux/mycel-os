@@ -1,0 +1,31 @@
+[package]
+name        = "vlc"
+version     = "3.0.21"
+description = "Free and open source cross-platform multimedia player"
+license     = "LGPL-2.1"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://download.videolan.org/pub/videolan/vlc/3.0.21/vlc-3.0.21.tar.xz"
+
+[build]
+system   = "script"
+commands = [
+  "./configure --prefix=/usr --disable-qt --enable-wayland",
+  "make -j$(nproc)",
+  "make install",
+]
+
+[install]
+binaries = [
+  { from = "bin/vlc", to = "vlc" }
+]
+
+[desktop]
+name       = "VLC media player"
+exec       = "vlc %U"
+icon       = "vlc"
+categories = ["AudioVideo", "Video", "Audio", "Player"]
+mime       = ["video/mp4", "video/x-matroska", "audio/mpeg", "audio/ogg"]

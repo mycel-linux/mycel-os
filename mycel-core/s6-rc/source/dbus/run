@@ -1,0 +1,5 @@
+#!/bin/sh
+# Use s6-notifyoncheck so dependents wait until the dbus socket is actually
+# listening, not just until the process has been spawned.
+exec s6-notifyoncheck -d -s 250 -T 15000 \
+    dbus-daemon --system --nofork --nopidfile

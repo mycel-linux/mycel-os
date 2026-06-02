@@ -1,0 +1,18 @@
+[package]
+name        = "bottom"
+version     = "0.10.2"
+description = "Customisable cross-platform graphical process and system monitor"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "ClementTsang/bottom"
+tag      = "0.10.2"
+asset    = "bottom_x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "btm", to = "btm" }
+]

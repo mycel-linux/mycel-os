@@ -1,0 +1,18 @@
+[package]
+name        = "gitui"
+version     = "0.26.3"
+description = "Blazing fast terminal UI for git"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "extrawurst/gitui"
+tag      = "v0.26.3"
+asset    = "gitui-linux-x86_64.tar.gz"
+
+[install]
+binaries = [
+  { from = "gitui", to = "gitui" }
+]

@@ -1,0 +1,2 @@
+#!/bin/sh
+exec udevd --daemon=0 --resolve-names=never

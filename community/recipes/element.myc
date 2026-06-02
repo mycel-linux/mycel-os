@@ -1,0 +1,26 @@
+[package]
+name        = "element"
+version     = "1.11.93"
+description = "Matrix-based end-to-end encrypted messenger and collaboration app"
+license     = "Apache-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "element-hq/element-desktop"
+tag      = "v1.11.93"
+asset    = "element-desktop-v1.11.93-linux-x86_64.tar.gz"
+
+[install]
+prefix  = "/opt"
+binaries = [
+  { from = "element-desktop-v1.11.93-linux-x86_64/element-desktop", to = "element" }
+]
+
+[desktop]
+name       = "Element"
+exec       = "element %U"
+icon       = "element"
+categories = ["Network", "InstantMessaging"]
+mime       = ["x-scheme-handler/element"]

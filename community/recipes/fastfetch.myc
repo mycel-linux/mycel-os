@@ -10,10 +10,10 @@ arch        = "x86_64"
 type     = "github-release"
 repo     = "fastfetch-cli/fastfetch"
 tag      = "2.63.1"
-asset    = "fastfetch-musl-amd64.tar.gz"
+asset    = "fastfetch-linux-amd64.tar.gz"
 checksum = "sha256:0f528399bf907171e1fb77a9d6c4ff3933fa1b1abca6292ccf84a78c6c599f40"
 
 [install]
 binaries = [
-  { from = "fastfetch-musl-amd64/usr/bin/fastfetch", to = "fastfetch" }
+  { from = "fastfetch-linux-amd64/usr/bin/fastfetch", to = "fastfetch" }
 ]

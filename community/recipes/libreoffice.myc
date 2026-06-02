@@ -1,0 +1,23 @@
+[package]
+name        = "libreoffice"
+version     = "24.8.4"
+description = "Free and open source office suite"
+license     = "MPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://download.documentfoundation.org/libreoffice/stable/24.8.4/deb/x86_64/LibreOffice_24.8.4_Linux_x86-64_deb.tar.gz"
+
+[install]
+script = "install.sh"
+binaries = [
+  { from = "opt/libreoffice24.8/program/soffice", to = "libreoffice" }
+]
+
+[desktop]
+name       = "LibreOffice"
+exec       = "libreoffice %U"
+icon       = "libreoffice-startcenter"
+categories = ["Office"]

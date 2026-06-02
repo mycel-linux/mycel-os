@@ -1,0 +1,27 @@
+[package]
+name        = "spotify"
+version     = "1.2.47.152"
+description = "Music streaming service"
+license     = "Proprietary"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://repository.spotify.com/pool/non-free/s/spotify-client/spotify-client_1.2.47.152.g52dfbee2_amd64.deb"
+
+[install]
+script = "install.sh"
+binaries = [
+  { from = "usr/bin/spotify", to = "spotify" }
+]
+icons = [
+  { src = "usr/share/spotify/icons/spotify-linux-512.png", name = "spotify", size = 512 }
+]
+
+[desktop]
+name       = "Spotify"
+exec       = "spotify %U"
+icon       = "spotify"
+categories = ["Audio", "Music"]
+mime       = ["x-scheme-handler/spotify"]

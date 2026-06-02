@@ -1,0 +1,35 @@
+[package]
+name        = "lutris"
+version     = "0.5.18"
+description = "Open gaming platform for Linux — manage all your games in one place"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "lutris/lutris"
+tag      = "v0.5.18"
+asset    = "lutris_0.5.18.tar.xz"
+
+[build]
+system   = "script"
+commands = [
+  "python3 setup.py build",
+  "python3 setup.py install --prefix=/usr",
+]
+
+[install]
+binaries = [
+  { from = "bin/lutris", to = "lutris" }
+]
+
+[desktop]
+name       = "Lutris"
+exec       = "lutris %U"
+icon       = "lutris"
+categories = ["Game"]
+mime       = ["x-scheme-handler/lutris"]
+
+[dependencies]
+runtime = ["python3", "gtk3", "wine"]

@@ -1,0 +1,25 @@
+[package]
+name        = "heroic"
+version     = "2.16.1"
+description = "Open source Epic Games and GOG launcher for Linux"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "Heroic-Games-Launcher/HeroicGamesLauncher"
+tag      = "v2.16.1"
+asset    = "Heroic-2.16.1.AppImage"
+
+[install]
+binaries = [
+  { from = "Heroic-2.16.1.AppImage", to = "heroic" }
+]
+
+[desktop]
+name       = "Heroic Games Launcher"
+exec       = "heroic %U"
+icon       = "heroic"
+categories = ["Game"]
+mime       = ["x-scheme-handler/heroic"]

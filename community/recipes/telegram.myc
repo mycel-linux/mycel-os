@@ -1,0 +1,27 @@
+[package]
+name        = "telegram"
+version     = "5.10.1"
+description = "Fast and secure messaging app"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://td.telegram.org/tlinux/tsetup.5.10.1.tar.xz"
+
+[install]
+prefix  = "/opt"
+binaries = [
+  { from = "Telegram/Telegram", to = "telegram" }
+]
+icons = [
+  { src = "Telegram/telegram.png", name = "telegram", size = 256 }
+]
+
+[desktop]
+name       = "Telegram"
+exec       = "telegram -- %u"
+icon       = "telegram"
+categories = ["Network", "InstantMessaging"]
+mime       = ["x-scheme-handler/tg"]

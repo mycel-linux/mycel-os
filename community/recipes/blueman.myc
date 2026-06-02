@@ -1,0 +1,37 @@
+[package]
+name        = "blueman"
+version     = "2.4.3"
+description = "Full-featured Bluetooth manager"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "blueman-project/blueman"
+tag      = "2.4.3"
+asset    = "blueman-2.4.3.tar.xz"
+
+[build]
+system   = "script"
+commands = [
+  "./configure --prefix=/usr --sysconfdir=/etc",
+  "make -j$(nproc)",
+  "make install",
+]
+
+[install]
+binaries = [
+  { from = "apps/blueman-manager",    to = "blueman-manager"    },
+  { from = "apps/blueman-applet",     to = "blueman-applet"     },
+  { from = "apps/blueman-adapters",   to = "blueman-adapters"   },
+]
+
+[desktop]
+name       = "Bluetooth Manager"
+exec       = "blueman-manager"
+icon       = "blueman"
+categories = ["System", "Bluetooth"]
+
+[dependencies]
+runtime = ["bluez", "python3", "gtk3"]

@@ -1,0 +1,21 @@
+[package]
+name        = "nushell"
+version     = "0.100.0"
+description = "Modern shell for the GitHub era — treats data as structured"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "nushell/nushell"
+tag      = "0.100.0"
+asset    = "nu-0.100.0-x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "nu", to = "nu" }
+]
+
+[hooks]
+post_install = "grep -qxF '/usr/bin/nu' /etc/shells || echo '/usr/bin/nu' >> /etc/shells"

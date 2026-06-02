@@ -1,0 +1,25 @@
+[package]
+name        = "keepassxc"
+version     = "2.7.9"
+description = "Cross-platform password manager"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "keepassxreboot/keepassxc"
+tag      = "2.7.9"
+asset    = "KeePassXC-2.7.9-x86_64.AppImage"
+
+[install]
+script = "install.sh"
+binaries = [
+  { from = "KeePassXC-2.7.9-x86_64.AppImage", to = "keepassxc" }
+]
+
+[desktop]
+name       = "KeePassXC"
+exec       = "keepassxc %f"
+icon       = "keepassxc"
+categories = ["Utility", "Security"]

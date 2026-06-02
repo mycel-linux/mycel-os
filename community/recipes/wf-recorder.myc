@@ -1,0 +1,26 @@
+[package]
+name        = "wf-recorder"
+version     = "0.4.0"
+description = "Wayland screen recorder"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "github-release"
+repo = "ammen99/wf-recorder"
+tag  = "v0.4.0"
+asset = "wf-recorder-0.4.0.tar.gz"
+
+[build]
+system   = "meson"
+commands = [
+  "meson setup build --prefix=/usr",
+  "ninja -C build",
+  "ninja -C build install",
+]
+
+[install]
+binaries = [
+  { from = "build/wf-recorder", to = "wf-recorder" }
+]

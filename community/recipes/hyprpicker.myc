@@ -1,0 +1,18 @@
+[package]
+name        = "hyprpicker"
+version     = "0.4.1"
+description = "Wayland color picker"
+license     = "BSD-3-Clause"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "github-release"
+repo = "hyprwm/hyprpicker"
+tag  = "v0.4.1"
+asset = "hyprpicker"
+
+[install]
+binaries = [
+  { from = "hyprpicker", to = "hyprpicker" }
+]

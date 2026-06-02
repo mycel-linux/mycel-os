@@ -1,0 +1,18 @@
+[package]
+name        = "ripgrep"
+version     = "14.1.1"
+description = "Recursively searches directories with regex — faster than grep"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "BurntSushi/ripgrep"
+tag      = "14.1.1"
+asset    = "ripgrep-14.1.1-x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "ripgrep-14.1.1-x86_64-unknown-linux-gnu/rg", to = "rg" }
+]

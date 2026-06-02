@@ -1,0 +1,14 @@
+#!/bin/sh
+username=$(awk -F'"' '/^\[\[users\]\]/{f=1} f && /^name/{print $2; exit}' \
+    /etc/mycel.toml 2>/dev/null)
+username="${username:-live}"
+uid=$(id -u "$username" 2>/dev/null || echo "1000")
+
+mkdir -p "/run/user/$uid"
+chown "${username}:${username}" "/run/user/$uid" 2>/dev/null || true
+chmod 700 "/run/user/$uid"
+
+exec s6-setuidgid "$username" \
+    env HOME="/home/$username" USER="$username" \
+    XDG_RUNTIME_DIR="/run/user/$uid" \
+    pipewire

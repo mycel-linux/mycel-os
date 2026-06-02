@@ -1,0 +1,29 @@
+[package]
+name        = "vscodium"
+version     = "1.96.4.25028"
+description = "VS Code without Microsoft telemetry or branding"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "VSCodium/vscodium"
+tag      = "1.96.4.25028"
+asset    = "VSCodium-linux-x64-1.96.4.25028.tar.gz"
+
+[install]
+prefix  = "/opt"
+binaries = [
+  { from = "VSCodium/bin/codium", to = "codium" }
+]
+icons = [
+  { src = "VSCodium/resources/app/resources/linux/code.png", name = "vscodium", size = 512 }
+]
+
+[desktop]
+name       = "VSCodium"
+exec       = "codium %F"
+icon       = "vscodium"
+categories = ["Development", "TextEditor"]
+mime       = ["text/plain", "inode/directory"]

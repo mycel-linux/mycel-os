@@ -1,5 +1,7 @@
 pub mod active;
 pub mod boot;
+pub mod doctor;
+pub mod get;
 pub mod check;
 pub mod update;
 pub mod diff;

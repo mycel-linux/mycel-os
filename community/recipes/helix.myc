@@ -1,0 +1,18 @@
+[package]
+name        = "helix"
+version     = "24.07"
+description = "Post-modern modal text editor built in Rust"
+license     = "MPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type  = "github-release"
+repo  = "helix-editor/helix"
+tag   = "24.07"
+asset = "helix-24.07-x86_64-linux.tar.xz"
+
+[install]
+binaries = [
+  { from = "helix-24.07-x86_64-linux/hx", to = "hx" }
+]

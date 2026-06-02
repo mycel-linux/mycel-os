@@ -1,0 +1,18 @@
+[package]
+name        = "lazygit"
+version     = "0.44.1"
+description = "Terminal UI for git commands"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "jesseduffield/lazygit"
+tag      = "v0.44.1"
+asset    = "lazygit_0.44.1_Linux_x86_64.tar.gz"
+
+[install]
+binaries = [
+  { from = "lazygit", to = "lazygit" }
+]

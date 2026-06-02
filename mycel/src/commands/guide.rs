@@ -3,6 +3,7 @@ use colored::Colorize;
 
 const TOPICS: &[(&str, &str)] = &[
     ("start",       "What is MycelOS and how to get started"),
+    ("doctor",      "Diagnose a broken or unhealthy system"),
     ("packages",    "Installing software with .myc recipes"),
     ("generations", "Switch, boot, rollback — the generation system"),
     ("fessus",      "Configuring FessusDE via fessus.toml"),
@@ -62,19 +63,24 @@ fn print_topic(topic: &str) {
             header("Installing Packages");
             println!("Packages come from {} — TOML recipe files.", ".myc".bold());
             println!();
-            println!("{}", "Option 1: declare in mycel.toml (recommended)".bold());
-            println!("  Add the package name to [packages] install in mycel.toml,");
-            println!("  then run {}. MycelOS resolves it from your overlays.", "mycel switch".bold());
+            println!("{}", "Option 1: install immediately (like pacman -S)".bold());
+            println!("  {}", "mycel get firefox btop".bold());
+            println!("  Installs right now and saves to mycel.toml automatically.");
             println!();
-            println!("{}", "Option 2: install a .myc recipe directly".bold());
+            println!("{}", "Option 2: declare in mycel.toml, then apply".bold());
+            println!("  Add the package name to [packages] install = [...] in mycel.toml,");
+            println!("  then run {}.", "mycel switch".bold());
+            println!();
+            println!("{}", "Option 3: install a .myc recipe directly".bold());
             println!("  {}", "mycel-pkg install btop.myc".bold());
             println!();
-            println!("{}", "Option 3: ephemeral — try without installing".bold());
+            println!("{}", "Option 4: ephemeral — try without installing".bold());
             println!("  {}", "mycel spore btop".bold());
             println!("  The shell and everything in it vanish when you exit.");
             println!();
             println!("{}", "Pinning a package across rollbacks:".bold());
-            println!("  {}", "mycel lock firefox".bold());
+            println!("  {}   — pin it", "mycel lock firefox".bold());
+            println!("  {} — remove the pin", "mycel unlock firefox".bold());
             println!("  Locked packages survive even if you boot into an old generation.");
             println!();
         }
@@ -204,6 +210,24 @@ fn print_topic(topic: &str) {
             println!();
             println!("{}", "Submit to the community index:".bold());
             println!("  {}", "mycel-pkg submit mytool.myc".bold());
+            println!();
+        }
+
+        "doctor" => {
+            header("Diagnosing Your System");
+            println!("Run {} to get a full health report:", "mycel doctor".bold());
+            println!();
+            println!("  It checks:");
+            println!("    • mycel.toml and fessus.toml parse correctly");
+            println!("    • all core s6 services are up");
+            println!("    • the package database exists and is populated");
+            println!("    • your current generation is recorded");
+            println!("    • disk space isn't critically low");
+            println!();
+            println!("{}", "Common fixes:".bold());
+            println!("  s6 service down  →  {}", "s6-rc -l /run/s6-rc -u change <svc>".bold());
+            println!("  no generation    →  {}", "mycel switch".bold());
+            println!("  missing fessus   →  {}", "mycel edit fessus".bold());
             println!();
         }
 

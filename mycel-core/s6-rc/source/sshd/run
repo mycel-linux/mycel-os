@@ -1,0 +1,3 @@
+#!/bin/sh
+[ -f /etc/ssh/ssh_host_rsa_key ] || ssh-keygen -A
+exec sshd -D

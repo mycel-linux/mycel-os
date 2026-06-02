@@ -1,0 +1,24 @@
+[package]
+name        = "ardour"
+version     = "8.10"
+description = "Professional open source digital audio workstation"
+license     = "GPL-2.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "url"
+url  = "https://community.ardour.org/download?ardour_os=linux&ardour_cpu=x86_64&ardour_type=compiled&ardour_version=8.10"
+
+[install]
+prefix = "/opt"
+script = "install.sh"
+binaries = [
+  { from = "Ardour-8.10.0/bin/ardour8", to = "ardour" }
+]
+
+[desktop]
+name       = "Ardour"
+exec       = "ardour"
+icon       = "ardour8"
+categories = ["AudioVideo", "Audio", "Sequencer", "Midi"]

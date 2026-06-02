@@ -1,0 +1,18 @@
+[package]
+name        = "zoxide"
+version     = "0.9.4"
+description = "Smarter cd command that learns your habits"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "ajeetdsouza/zoxide"
+tag      = "v0.9.4"
+asset    = "zoxide-0.9.4-x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "zoxide", to = "zoxide" }
+]

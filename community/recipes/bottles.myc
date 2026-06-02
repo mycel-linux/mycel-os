@@ -1,0 +1,27 @@
+[package]
+name        = "bottles"
+version     = "51.16"
+description = "Run Windows software and games on Linux with ease"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "bottlesdevs/Bottles"
+tag      = "51.16"
+asset    = "Bottles-51.16-x86_64.AppImage"
+
+[install]
+binaries = [
+  { from = "Bottles-51.16-x86_64.AppImage", to = "bottles" }
+]
+
+[desktop]
+name       = "Bottles"
+exec       = "bottles"
+icon       = "com.usebottles.bottles"
+categories = ["Utility", "Emulator"]
+
+[dependencies]
+runtime = ["wine", "winetricks"]

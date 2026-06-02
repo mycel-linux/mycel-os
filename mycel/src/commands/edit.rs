@@ -3,11 +3,16 @@ use colored::Colorize;
 use std::process::Command;
 
 const MYCEL_TOML: &str = "/etc/mycel.toml";
-const FESSUS_TOML: &str = "/home/.config/fessus.toml";
 
 pub fn run(target: Option<&str>) -> Result<()> {
-    let path = match target {
-        Some("fessus") => FESSUS_TOML,
+    let fessus_toml;
+    let path: &str = match target {
+        Some("fessus") => {
+            let home = std::env::var("HOME")
+                .map_err(|_| anyhow::anyhow!("$HOME is not set"))?;
+            fessus_toml = format!("{}/.config/fessus.toml", home);
+            &fessus_toml
+        }
         Some("mycel") | None => MYCEL_TOML,
         Some(other) => bail!("unknown target '{}'. Use 'mycel' or 'fessus'.", other),
     };

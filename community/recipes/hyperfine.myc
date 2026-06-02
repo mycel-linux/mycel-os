@@ -1,0 +1,18 @@
+[package]
+name        = "hyperfine"
+version     = "1.18.0"
+description = "Command-line benchmarking tool"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "sharkdp/hyperfine"
+tag      = "v1.18.0"
+asset    = "hyperfine-v1.18.0-x86_64-unknown-linux-gnu.tar.gz"
+
+[install]
+binaries = [
+  { from = "hyperfine-v1.18.0-x86_64-unknown-linux-gnu/hyperfine", to = "hyperfine" }
+]
