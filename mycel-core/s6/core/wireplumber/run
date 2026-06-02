@@ -1,0 +1,3 @@
+#!/bin/sh
+s6-svstat /run/service/pipewire >/dev/null 2>&1 || { sleep 1; exec "$0"; }
+exec s6-setuidgid "${USER:-live}" wireplumber

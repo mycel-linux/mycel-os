@@ -23,11 +23,12 @@ pub fn run() -> Result<()> {
 
     // ── 2. Update overlay cache + build package index ─────────────────────────
     pb.set_message("updating overlay cache...");
+    let channel = config.system.channel.as_deref().unwrap_or("stable");
     let sources = config.overlays
         .as_ref()
         .map(|o| o.sources.clone())
         .unwrap_or_default();
-    let index = PackageIndex::build(&sources)?;
+    let index = PackageIndex::build(&sources, channel)?;
 
     // ── 3. Diff packages ──────────────────────────────────────────────────────
     pb.set_message("resolving packages...");
@@ -134,7 +135,7 @@ fn installed_packages() -> HashSet<String> {
 fn reload_services(desired: &[String]) -> Result<()> {
     let desired_set: HashSet<&str> = desired.iter().map(|s| s.as_str()).collect();
 
-    let active: HashSet<String> = fs::read_dir("/var/service")
+    let active: HashSet<String> = fs::read_dir("/run/service")
         .map(|entries| {
             entries.flatten()
                 .filter_map(|e| e.file_name().into_string().ok())
@@ -144,18 +145,22 @@ fn reload_services(desired: &[String]) -> Result<()> {
 
     for svc in &desired_set {
         if !active.contains(*svc) {
-            let src = format!("/etc/sv/{}", svc);
-            let dst = format!("/var/service/{}", svc);
-            if std::path::Path::new(&src).exists() {
-                unix_fs::symlink(&src, &dst).ok();
+            let src_core = format!("/etc/s6/sv/core/{}", svc);
+            let src_opt  = format!("/etc/s6/sv/optional/{}", svc);
+            let dst      = format!("/run/service/{}", svc);
+            if std::path::Path::new(&src_core).exists() {
+                unix_fs::symlink(&src_core, &dst).ok();
+            } else if std::path::Path::new(&src_opt).exists() {
+                unix_fs::symlink(&src_opt, &dst).ok();
             }
         }
     }
 
     for svc in &active {
         if !desired_set.contains(svc.as_str()) {
-            Command::new("sv").args(["stop", svc]).status().ok();
-            fs::remove_file(format!("/var/service/{}", svc)).ok();
+            let svc_path = format!("/run/service/{}", svc);
+            Command::new("s6-svc").args(["-d", &svc_path]).status().ok();
+            fs::remove_file(&svc_path).ok();
         }
     }
 

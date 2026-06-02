@@ -96,6 +96,12 @@ enum Commands {
         /// Topic to read: start, packages, generations, fessus, spore, spread
         topic: Option<String>,
     },
+
+    /// Pull latest overlay cache and show what changed
+    Update,
+
+    /// Show available package updates without applying them
+    Check,
 }
 
 fn main() -> Result<()> {
@@ -116,5 +122,7 @@ fn main() -> Result<()> {
         Commands::Spore { packages }   => commands::spore::run(&packages),
         Commands::Spread { export }    => commands::spread::run(&export),
         Commands::Guide { topic }      => commands::guide::run(topic.as_deref()),
+        Commands::Update               => commands::update::run(),
+        Commands::Check                => commands::check::run(),
     }
 }

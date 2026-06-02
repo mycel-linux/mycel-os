@@ -1,2 +1,2 @@
 #!/bin/sh
-exec chpst -u live env HOME=/home/live USER=live sway
+exec s6-setuidgid live env HOME=/home/live USER=live sway

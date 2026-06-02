@@ -1,0 +1,3 @@
+#!/bin/sh
+[ -d /etc/ssh ] || ssh-keygen -A
+exec sshd -D

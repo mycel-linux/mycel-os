@@ -1,29 +1,38 @@
 <div align="center">
   <img src="mycel-core/assets/logo_black.png" width="120" />
   <h1>MycelOS</h1>
-  <p>Declarative. Reproducible. Truly independent.</p>
+  <p>Independent. Declarative. s6.</p>
 
   ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
   ![Status](https://img.shields.io/badge/status-early%20development-orange)
+  ![Init](https://img.shields.io/badge/init-s6-purple)
   ![Platform](https://img.shields.io/badge/platform-x86__64-lightgrey)
 </div>
 
 ---
 
-MycelOS is an independent Linux distribution built from scratch. Not a fork. Not based on anything. It has its own package format, its own package manager, and its own desktop environment — all driven by a single declarative file: `mycel.toml`.
+MycelOS is an independent Linux distribution built from scratch. Not a fork. Not based on anything. It runs on **s6** — a modern, actively maintained process supervision suite — and is driven by a single declarative file: `mycel.toml`.
 
-Your entire system — packages, services, users, desktop — is declared in one place and applied atomically. Every change creates a new generation you can roll back to. The system is immutable by default.
+No systemd. No runit. No OpenRC. Just s6 — fast, clean, and built for the future.
 
-## What makes it different
+## Why s6?
 
-Most distros are forks. They live under the decisions of their upstream. MycelOS owns its entire stack:
+The anti-systemd space is crowded but stagnant. Void Linux and Artix run runit — a supervision suite last seriously updated in 2004. Alpine and Gentoo run OpenRC — a service manager, not a real supervisor. These are respected choices but they are old choices.
 
-- **`.myc` packages** — a simple TOML-based package format anyone can write
-- **`mycel-pkg`** — a package manager that installs `.myc` packages with checksum verification, desktop integration, and clean removal
-- **`mycel`** — the system manager that applies your `mycel.toml` declaratively
-- **FessusDE** — a lightweight Wayland desktop built for low-to-mid range hardware
-- **runit** — fast, simple init system, no systemd
-- **Community overlays** — add any GitHub repo as a package source, no server needed
+s6 is different. Written by Laurent Bercot and actively maintained, s6 is a proper process supervision suite with clean C code, real dependency handling via s6-rc, and a design that hasn't accumulated 20 years of technical debt. MycelOS is one of the first independent distributions to be built ground-up with s6 as the init system.
+
+If you are done with systemd and done with aging alternatives, MycelOS is built for you.
+
+## The full stack
+
+| Component | Choice | Why |
+|---|---|---|
+| Init | **s6** | Modern, actively maintained, proper supervision |
+| Packages | **mycel-pkg + .myc** | Own format, GitHub-native, no foreign tooling |
+| Config | **mycel.toml** | One file declares your entire system |
+| Desktop | **FessusDE** | Lightweight Wayland DE for real hardware |
+| Installer | **Calamares** | Friendly GUI install, no command line required |
+| Bootloader | **Limine** | Modern, fast, BIOS + UEFI |
 
 ## mycel.toml
 
@@ -33,9 +42,8 @@ One file. Your whole system.
 [system]
 hostname = "mycelbox"
 timezone = "America/New_York"
-locale   = "en_US.UTF-8"
 kernel   = "performance"
-immutable = true
+channel  = "stable"
 
 [packages]
 install = ["firefox", "kitty", "git", "btop"]
@@ -44,7 +52,6 @@ lock    = ["firefox"]
 [overlays]
 sources = [
   "github:mycel-linux/mycel-os",
-  "github:yourname/your-packages",
 ]
 
 [desktop]
@@ -60,17 +67,17 @@ groups = ["wheel", "audio", "video", "input"]
 password_hash = ""
 ```
 
-Run `mycel switch` to apply it. That's it.
+Run `mycel switch` to apply. Every change creates a new generation you can roll back to.
 
 ## The .myc package format
 
-Packages are defined in plain TOML. Writing one takes five minutes:
+Packages are plain TOML. Anyone can write one:
 
 ```toml
 [package]
 name        = "btop"
 version     = "1.4.7"
-description = "Resource monitor showing CPU, memory, disk and network usage"
+description = "Resource monitor"
 license     = "Apache-2.0"
 maintainer  = "yourname"
 arch        = "x86_64"
@@ -83,24 +90,18 @@ asset    = "btop-x86_64-unknown-linux-musl.tar.gz"
 checksum = "sha256:5099054dd6a101bd12eb6ff3702a9a6a3f57aaa27923a0da478ae5b517faf335"
 
 [install]
-binaries = [
-  { from = "btop/bin/btop", to = "btop" }
-]
-
-[desktop]
-name       = "btop++"
-exec       = "btop"
-icon       = "btop"
-categories = ["System", "Monitor"]
+binaries = [{ from = "btop/bin/btop", to = "btop" }]
 ```
 
-Install it: `mycel-pkg install btop.myc`
+Install: `mycel-pkg install btop.myc`
 
 ## mycel CLI
 
 | Command | Description |
 |---|---|
-| `mycel switch` | Apply `mycel.toml` to the running system |
+| `mycel switch` | Apply `mycel.toml` — install packages, reload s6 services |
+| `mycel update` | Pull latest overlay cache |
+| `mycel check` | Show available updates without applying |
 | `mycel boot <id>` | Set boot generation for next restart |
 | `mycel edit` | Open `mycel.toml` in `$EDITOR` |
 | `mycel edit fessus` | Open `fessus.toml` — auto-applies on save |
@@ -109,58 +110,56 @@ Install it: `mycel-pkg install btop.myc`
 | `mycel diff <a> <b>` | Compare two generations |
 | `mycel purge` | Garbage collect old generations |
 | `mycel isolate <id>` | Pin a generation so purge skips it |
-| `mycel lock <pkg>` | Pin a package so it survives rollbacks |
+| `mycel lock <pkg>` | Pin a package across rollbacks |
 | `mycel spore <pkgs>` | Ephemeral shell — vanishes on exit |
-| `mycel spread --export <path>` | Export config for a fresh install |
+| `mycel spread --export <path>` | Export config for fresh install |
 | `mycel guide` | Built-in guide for new users |
-
-## mycel-pkg CLI
-
-| Command | Description |
-|---|---|
-| `mycel-pkg install <recipe.myc>` | Install a package from a recipe |
-| `mycel-pkg remove <name>` | Remove an installed package |
-| `mycel-pkg verify <recipe.myc>` | Validate a recipe without installing |
-| `mycel-pkg info <recipe.myc>` | Show package metadata |
-| `mycel-pkg list` | List all installed packages |
-| `mycel-pkg search <query>` | Search the community index |
-| `mycel-pkg submit <recipe.myc>` | Prepare a recipe for community submission |
 
 ## FessusDE
 
-FessusDE (Latin: *tired*) is a Wayland-native desktop environment designed for low-to-mid range hardware. It composes sway, eww, waybar, and dunst into a cohesive experience with a single configuration file.
+FessusDE (Latin: *tired*) is a Wayland-native desktop for low-to-mid range hardware. It composes sway, eww, waybar, and dunst into a cohesive experience configured entirely from `~/.config/fessus.toml`.
 
-Its signature feature is the **radial corner menu** — a hot-corner activated launcher that fans your pinned apps in a quarter-circle arc from the corner of your screen.
-
-Configuration lives in `~/.config/fessus.toml`. Open it with `mycel edit fessus` — changes apply instantly when you save.
+Its signature feature is the **radial corner menu** — a hot-corner launcher that fans your pinned apps in a quarter-circle arc.
 
 ```toml
 [fessus]
 accent_color = "#3F549E"
 theme        = "dark"
-font         = "Inter"
 
 [radial]
 corner = "bottom-left"
 pinned = ["firefox", "thunar", "kitty", "mpv"]
-
-[bar]
-position     = "top"
-show_battery = true
-show_network = true
 
 [keybindings]
 mod      = "Super"
 terminal = "kitty"
 ```
 
-Supported desktop environments: `fessus`, `hyprland`, `niri`, `plasma`, `gnome`, `xfce`, `cinnamon`, `none`
+`mycel edit fessus` — changes apply instantly on save.
+
+## Channels
+
+```toml
+[system]
+channel = "stable"    # stable or unstable
+```
+
+- **stable** — tested releases, recommended for most users
+- **unstable** — tracks `main`, bleeding edge, for adventurous users
+
+`mycel update` pulls the latest packages for your channel. `mycel check` shows what would change without applying it.
 
 ## Community packages
 
-Anyone can package software for MycelOS. Write a `.myc` recipe, host it on GitHub, and add it to the community index. No server required — the index is just a file in this repo.
+Anyone can package software for MycelOS and list it in the community index. No server required — the index is a file in this repo. See [community/CONTRIBUTING.md](community/CONTRIBUTING.md).
 
-To submit a package, read [community/CONTRIBUTING.md](community/CONTRIBUTING.md).
+```toml
+[overlays]
+sources = [
+  "github:mycel-linux/mycel-os",
+  "github:yourname/your-packages",
+]
+```
 
 ## Repo structure
 
@@ -168,7 +167,7 @@ To submit a package, read [community/CONTRIBUTING.md](community/CONTRIBUTING.md)
 mycel-os/
   mycel/              # CLI system manager (Rust)
   mycel-pkg/          # Package manager (Rust)
-  mycel-core/         # runit services, base configs, assets
+  mycel-core/         # s6 services, base configs, assets
   fessus/             # FessusDE + fessus-init config generator
   mycel-installer/    # Calamares installer configuration
   mycel-iso/          # ISO build scripts
@@ -177,7 +176,7 @@ mycel-os/
 
 ## Status
 
-MycelOS is in early development. The CLI tools build and run. The package format is defined. The desktop environment is designed. A bootable ISO does not exist yet.
+MycelOS is in active early development. The CLI tools build and run. The package manager installs and removes packages. The desktop environment generates configs. A bootable ISO is in progress.
 
 If you want to follow along or contribute, watch this repo.
 

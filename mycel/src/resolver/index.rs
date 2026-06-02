@@ -23,11 +23,11 @@ pub struct PackageIndex {
 
 impl PackageIndex {
     /// Build an index from a list of overlay sources.
-    pub fn build(sources: &[String]) -> Result<Self> {
+    pub fn build(sources: &[String], channel: &str) -> Result<Self> {
         let mut map = HashMap::new();
 
         for source in sources {
-            match overlay::fetch(source) {
+            match overlay::fetch(source, channel) {
                 Ok(path) => scan_overlay(&path, &mut map),
                 Err(e)   => eprintln!("  warning: skipping overlay {}: {}", source, e),
             }

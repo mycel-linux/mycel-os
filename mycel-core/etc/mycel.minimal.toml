@@ -4,6 +4,7 @@ timezone = "UTC"
 locale = "en_US.UTF-8"
 kernel = "stable"
 immutable = true
+channel = "stable"
 
 [boot]
 timeout = 3

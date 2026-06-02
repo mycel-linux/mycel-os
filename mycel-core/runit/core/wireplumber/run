@@ -1,4 +1,0 @@
-#!/bin/sh
-# Must start after pipewire
-sv check pipewire || { echo "waiting for pipewire..."; sleep 1; exit 1; }
-exec chpst -u "${USER:-user}" wireplumber

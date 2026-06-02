@@ -40,12 +40,18 @@ check_deps() {
 create_skeleton() {
     step "creating filesystem skeleton..."
     rm -rf "$ROOT"
-    mkdir -p "$ROOT"/{bin,sbin,lib,lib64,
-                     usr/{bin,sbin,lib,lib64,share/{applications,icons,fonts,mycel},include,local},
-                     etc/{sv,runit/{1,2,3},mycel,fastfetch,sway,waybar,dunst},
-                     var/{lib/mycel/packages,log,run,tmp},
-                     proc,sys,dev/{pts,shm},run,tmp,
-                     home/live/.config,root,boot,mnt,media,opt}
+    mkdir -p "$ROOT/bin" "$ROOT/sbin" "$ROOT/lib" "$ROOT/lib64"
+    mkdir -p "$ROOT/usr/bin" "$ROOT/usr/sbin" "$ROOT/usr/lib" "$ROOT/usr/lib64"
+    mkdir -p "$ROOT/usr/share/applications" "$ROOT/usr/share/icons"
+    mkdir -p "$ROOT/usr/share/fonts" "$ROOT/usr/share/mycel"
+    mkdir -p "$ROOT/usr/include" "$ROOT/usr/local"
+    mkdir -p "$ROOT/etc/sv" "$ROOT/etc/runit"
+    mkdir -p "$ROOT/etc/mycel" "$ROOT/etc/fastfetch" "$ROOT/etc/sway"
+    mkdir -p "$ROOT/etc/waybar" "$ROOT/etc/dunst"
+    mkdir -p "$ROOT/var/lib/mycel/packages" "$ROOT/var/log" "$ROOT/var/run" "$ROOT/var/tmp"
+    mkdir -p "$ROOT/proc" "$ROOT/sys" "$ROOT/dev/pts" "$ROOT/dev/shm"
+    mkdir -p "$ROOT/run" "$ROOT/tmp" "$ROOT/home/live/.config"
+    mkdir -p "$ROOT/root" "$ROOT/boot" "$ROOT/mnt" "$ROOT/media" "$ROOT/opt"
     chmod 1777 "$ROOT/tmp"
     chmod 0750 "$ROOT/root"
     mkdir -p "$PKG_CACHE"
@@ -91,21 +97,70 @@ install_musl() {
 # Downloads an Arch Linux package and extracts it into the rootfs.
 # This is a BUILD-TIME operation only — pacman is never installed in the rootfs.
 
+setup_arch_db() {
+    if [ ! -d "$PKG_CACHE/arch-db" ]; then
+        step "downloading Arch package database..."
+        mkdir -p "$PKG_CACHE/arch-db/extra" "$PKG_CACHE/arch-db/core"
+
+        curl -sL --max-time 120 --connect-timeout 15 \
+            "https://geo.mirror.pkgbuild.com/extra/os/x86_64/extra.db" \
+            -o "$PKG_CACHE/extra.db" || die "could not download Arch extra.db"
+
+        curl -sL --max-time 60 --connect-timeout 15 \
+            "https://geo.mirror.pkgbuild.com/core/os/x86_64/core.db" \
+            -o "$PKG_CACHE/core.db" || die "could not download Arch core.db"
+
+        tar -xzf "$PKG_CACHE/extra.db" -C "$PKG_CACHE/arch-db/extra" 2>/dev/null || true
+        tar -xzf "$PKG_CACHE/core.db"  -C "$PKG_CACHE/arch-db/core"  2>/dev/null || true
+
+        ok "package database ready"
+    fi
+}
+
+find_arch_pkg_filename() {
+    local pkgname="$1"
+    local desc_file
+
+    for repo in extra core; do
+        desc_file=$(find "$PKG_CACHE/arch-db/$repo" -name "desc" 2>/dev/null \
+            | xargs grep -l "^${pkgname}$" 2>/dev/null | head -1)
+        if [ -n "$desc_file" ]; then
+            local repo_found="$repo"
+            local filename
+            filename=$(awk '/^%FILENAME%/{getline; print}' "$desc_file")
+            echo "$repo_found/$filename"
+            return 0
+        fi
+    done
+    return 1
+}
+
 fetch_arch_pkg() {
     local pkgname="$1"
     local cached
     cached=$(find "$PKG_CACHE" -name "${pkgname}-*.pkg.tar.zst" 2>/dev/null | head -1)
 
     if [ -z "$cached" ]; then
+        local result
+        result=$(find_arch_pkg_filename "$pkgname") || {
+            echo "   skip: $pkgname not in Arch repos"
+            return 0
+        }
+
+        local repo filename
+        repo=$(dirname "$result")
+        filename=$(basename "$result")
+
         info "fetching $pkgname..."
-        local index
-        index=$(curl -s "$ARCH_MIRROR/" | grep -o "\"${pkgname}-[^\"]*\.pkg\.tar\.zst\"" | head -1 | tr -d '"')
-        [ -n "$index" ] || { echo "   skip: $pkgname not found in mirror"; return 0; }
-        curl -sL "$ARCH_MIRROR/$index" -o "$PKG_CACHE/$index"
-        cached="$PKG_CACHE/$index"
+        curl -sL --max-time 120 --connect-timeout 15 \
+            "https://geo.mirror.pkgbuild.com/${repo}/os/x86_64/${filename}" \
+            -o "$PKG_CACHE/$filename" || {
+            echo "   skip: download failed for $pkgname"
+            return 0
+        }
+        cached="$PKG_CACHE/$filename"
     fi
 
-    # Extract into rootfs, skip .PKGINFO and .MTREE metadata
     tar -I zstd -xf "$cached" -C "$ROOT" \
         --exclude='.PKGINFO' \
         --exclude='.MTREE' \
@@ -113,16 +168,30 @@ fetch_arch_pkg() {
         --exclude='.INSTALL' \
         2>/dev/null || true
 
-    ok "$pkgname extracted"
+    ok "$pkgname"
+}
+
+# ─── 4b. s6 init system ───────────────────────────────────────────────────────
+
+install_s6() {
+    info "installing s6 supervision suite..."
+    for pkg in skalibs execline s6 s6-rc; do
+        fetch_arch_pkg "$pkg"
+    done
+    ok "s6 installed"
 }
 
 # ─── 5. System packages from Arch (build-time only) ──────────────────────────
 
 install_system_packages() {
     step "fetching system packages (build-time binary source)..."
+    setup_arch_db
 
-    # Init and core
-    for pkg in runit eudev dbus seatd shadow; do
+    # s6 supervision suite
+    install_s6
+
+    # Core system
+    for pkg in eudev dbus seatd shadow; do
         fetch_arch_pkg "$pkg"
     done
 
@@ -236,35 +305,32 @@ install_runit() {
 
     cp -aT "$SCRIPT_DIR/../mycel-core/runit" "$ROOT/etc/sv/"
 
-    cat > "$ROOT/etc/runit/1" <<'EOF'
+    # s6 init script — PID 1
+    cat > "$ROOT/sbin/init" <<'EOF'
 #!/bin/sh
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev
 mount -t devpts devpts /dev/pts
 mount -t tmpfs tmpfs /run
-mkdir -p /run/runit /run/dbus /dev/shm
+mkdir -p /run/service /run/s6 /run/dbus /dev/shm
 chmod 1777 /dev/shm
 exec < /dev/console > /dev/console 2>&1
+exec s6-svscan /run/service
 EOF
+    chmod +x "$ROOT/sbin/init"
 
-    cat > "$ROOT/etc/runit/2" <<'EOF'
-#!/bin/sh
-exec runsvdir /var/service
-EOF
+    # Copy s6 service definitions
+    mkdir -p "$ROOT/etc/s6/sv"
+    cp -aT "$SCRIPT_DIR/../mycel-core/s6" "$ROOT/etc/s6/sv/"
 
-    cat > "$ROOT/etc/runit/3" <<'EOF'
-#!/bin/sh
-echo "MycelOS shutting down..."
-EOF
-
-    chmod +x "$ROOT/etc/runit/"{1,2,3}
-    ln -sf /etc/runit/1 "$ROOT/sbin/init" 2>/dev/null || true
-
-    mkdir -p "$ROOT/var/service"
+    # Enable core services at boot
+    mkdir -p "$ROOT/run/service"
     for svc in dbus udevd seatd pipewire wireplumber NetworkManager autologin; do
-        [ -d "$ROOT/etc/sv/$svc" ] && \
-            ln -sf "/etc/sv/$svc" "$ROOT/var/service/$svc" 2>/dev/null || true
+        [ -d "$ROOT/etc/s6/sv/core/$svc" ] && \
+            ln -sf "/etc/s6/sv/core/$svc" "$ROOT/etc/s6/sv/$svc" 2>/dev/null || true
+        [ -d "$ROOT/etc/s6/sv/optional/$svc" ] && \
+            ln -sf "/etc/s6/sv/optional/$svc" "$ROOT/etc/s6/sv/$svc" 2>/dev/null || true
     done
 
     ok "runit init tree ready"
