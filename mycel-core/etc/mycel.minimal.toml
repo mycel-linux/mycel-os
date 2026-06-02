@@ -5,6 +5,7 @@ locale = "en_US.UTF-8"
 kernel = "stable"
 immutable = true
 channel = "stable"
+keep_generations = 5
 
 [boot]
 timeout = 3

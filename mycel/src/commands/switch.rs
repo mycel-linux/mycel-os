@@ -9,9 +9,9 @@ use std::time::Duration;
 
 use crate::config::parser;
 use crate::resolver::PackageIndex;
+use crate::system::{btrfs, limine};
 
 const GEN_FILE:  &str = "/etc/mycel/generation";
-const PINS_DIR:  &str = "/etc/mycel/pins";
 const DB_PATH:   &str = "/var/lib/mycel/packages";
 
 pub fn run() -> Result<()> {
@@ -20,6 +20,7 @@ pub fn run() -> Result<()> {
     // ── 1. Load config ────────────────────────────────────────────────────────
     pb.set_message("reading /etc/mycel.toml...");
     let config = parser::load().context("could not load /etc/mycel.toml")?;
+    let keep = config.system.keep_generations.unwrap_or(5);
 
     // ── 2. Update overlay cache + build package index ─────────────────────────
     pb.set_message("updating overlay cache...");
@@ -84,9 +85,31 @@ pub fn run() -> Result<()> {
     pb.set_message("reloading services...");
     reload_services(&config.services.enable)?;
 
-    // ── 7. Record generation ──────────────────────────────────────────────────
+    // ── 7. Snapshot root before recording ────────────────────────────────────
+    pb.set_message("snapshotting root filesystem...");
+    let next_gen = {
+        let cur = limine::current_generation();
+        cur + 1
+    };
+
+    if btrfs::is_btrfs_root() {
+        match btrfs::snapshot(next_gen) {
+            Ok(_)  => {},
+            Err(e) => eprintln!("  {} snapshot failed (non-fatal): {}", "!!".yellow(), e),
+        }
+    }
+
+    // ── 8. Record generation ──────────────────────────────────────────────────
     pb.set_message("recording generation...");
     let gen = bump_generation()?;
+
+    // ── 9. Update Limine boot menu ────────────────────────────────────────────
+    if btrfs::is_btrfs_root() {
+        pb.set_message("updating boot menu...");
+        if let Ok(root_dev) = btrfs::root_device() {
+            limine::write(gen, &root_dev, keep).ok();
+        }
+    }
 
     pb.finish_and_clear();
 

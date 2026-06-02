@@ -1,15 +1,14 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Duration;
 
 use crate::config::parser;
-use crate::resolver::{overlay, PackageIndex};
+use crate::resolver::overlay;
 
 pub fn run() -> Result<()> {
     let config = parser::load().context("could not load /etc/mycel.toml")?;
     let channel = config.system.channel.as_deref().unwrap_or("stable");
-    let sources  = config.overlays.as_ref().map(|o| o.sources.clone()).unwrap_or_default();
 
     println!("{} channel: {}", "::".blue().bold(), channel.bold());
 
@@ -38,5 +37,3 @@ pub fn run() -> Result<()> {
 
     Ok(())
 }
-
-use anyhow::Context;

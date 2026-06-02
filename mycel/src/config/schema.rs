@@ -18,7 +18,8 @@ pub struct System {
     pub locale:    String,
     pub kernel:    String,
     pub immutable: bool,
-    pub channel:   Option<String>,
+    pub channel:          Option<String>,
+    pub keep_generations: Option<u64>,
 }
 
 #[derive(Deserialize, Debug)]
