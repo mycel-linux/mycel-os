@@ -1,0 +1,29 @@
+[package]
+name        = "kitty"
+version     = "0.47.1"
+description = "Fast, feature-rich, GPU-based terminal emulator"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "github-release"
+repo     = "kovidgoyal/kitty"
+tag      = "v0.47.1"
+asset    = "kitty-0.47.1-x86_64.txz"
+checksum = "sha256:9348ea9493ade88955dfdf4d69008cc4a4fb1b752ac8f38d471bc47188ddba04"
+
+[install]
+binaries = [
+  { from = "bin/kitty",  to = "kitty"  },
+  { from = "bin/kitten", to = "kitten" },
+]
+icons = [
+  { src = "share/icons/hicolor/256x256/apps/kitty.png", name = "kitty", size = 256 }
+]
+
+[desktop]
+name       = "kitty"
+exec       = "kitty"
+icon       = "kitty"
+categories = ["System", "TerminalEmulator"]

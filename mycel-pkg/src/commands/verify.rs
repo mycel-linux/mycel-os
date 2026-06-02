@@ -25,9 +25,15 @@ pub fn run(recipe_path: &str) -> Result<()> {
     check!(!recipe.package.description.is_empty(), "description is set");
     check!(!recipe.source.source_type.is_empty(),  "source.type is set");
 
+    // git sources use tag integrity instead of a file checksum
+    let needs_checksum = recipe.source.source_type != "git";
     check!(
-        recipe.source.checksum.is_some(),
-        "checksum is present (required for security)"
+        !needs_checksum || recipe.source.checksum.is_some(),
+        if needs_checksum {
+            "checksum is present (required for security)"
+        } else {
+            "git source — integrity provided by tag"
+        }
     );
 
     let has_binaries = recipe.install.binaries

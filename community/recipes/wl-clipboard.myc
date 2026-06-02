@@ -1,0 +1,30 @@
+[package]
+name        = "wl-clipboard"
+version     = "2.3.0"
+description = "Command-line copy/paste utilities for Wayland"
+license     = "GPL-3.0"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "git"
+url      = "https://github.com/bugaevc/wl-clipboard"
+tag      = "v2.3.0"
+
+[build]
+system   = "meson"
+commands = [
+  "meson setup build --prefix=/usr",
+  "ninja -C build",
+  "ninja -C build install",
+]
+
+[install]
+binaries = [
+  { from = "build/src/wl-copy",  to = "wl-copy"  },
+  { from = "build/src/wl-paste", to = "wl-paste" },
+]
+
+[dependencies]
+build   = ["meson", "ninja", "gcc", "wayland-devel"]
+runtime = ["wayland"]

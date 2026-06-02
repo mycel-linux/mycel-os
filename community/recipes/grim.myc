@@ -1,0 +1,28 @@
+[package]
+name        = "grim"
+version     = "1.4.0"
+description = "Screenshot tool for Wayland compositors"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type     = "url"
+url      = "https://github.com/emersion/grim/releases/download/v1.4.0/grim-1.4.0.tar.gz"
+checksum = "sha256:b6786e889ed93568634189a59f6b6429c041bf74883c10e8b6e2ed6772ae7ffb"
+
+[build]
+system   = "meson"
+commands = [
+  "meson setup build --prefix=/usr",
+  "ninja -C build",
+]
+
+[install]
+binaries = [
+  { from = "build/grim", to = "grim" }
+]
+
+[dependencies]
+build   = ["meson", "ninja", "gcc", "wayland-devel", "wayland-protocols", "libjpeg-turbo-devel"]
+runtime = ["wayland", "libjpeg-turbo"]

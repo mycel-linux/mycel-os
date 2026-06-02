@@ -1,0 +1,27 @@
+[package]
+name        = "eww"
+version     = "0.6.0"
+description = "Elkowar's Wacky Widgets — standalone widget system for Wayland"
+license     = "MIT"
+maintainer  = "mycel-linux"
+arch        = "x86_64"
+
+[source]
+type = "git"
+url  = "https://github.com/elkowar/eww"
+tag  = "v0.6.0"
+
+[build]
+system   = "cargo"
+commands = [
+  "cargo build --release --no-default-features --features=wayland",
+]
+
+[install]
+binaries = [
+  { from = "target/release/eww", to = "eww" }
+]
+
+[dependencies]
+build   = ["cargo", "gcc", "gtk3-devel", "pango-devel"]
+runtime = ["gtk3", "pango", "gdk-pixbuf2"]
