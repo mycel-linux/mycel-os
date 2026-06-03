@@ -230,6 +230,30 @@ mycel-os/
   community/          # Community overlay index + recipes
 ```
 
+## ISO Profiles
+
+MycelOS ships one ISO build system with multiple profiles. Each builds a separate ISO pre-loaded with a different desktop environment.
+
+| Profile | Desktop | Session type | Command |
+|---|---|---|---|
+| `fessus` | FessusDE (sway + Hyprland) | Wayland | `build.sh` |
+| `plasma` | KDE Plasma 6 | Wayland | `build.sh --profile plasma` |
+| `gnome` | GNOME | Wayland | `build.sh --profile gnome` |
+| `cinnamon` | Cinnamon | X11 | `build.sh --profile cinnamon` |
+| `xfce` | XFCE | X11 | `build.sh --profile xfce` |
+| `budgie` | Budgie | Wayland | `build.sh --profile budgie` |
+| `mate` | MATE | X11 | `build.sh --profile mate` |
+| `minimal` | None | TTY | `build.sh --profile minimal` |
+
+Switch desktop environments after install by editing `mycel.toml`:
+
+```toml
+[desktop]
+environment = "plasma"   # plasma, gnome, hyprland, fessus, cinnamon, xfce, budgie, mate, none
+```
+
+Then run `mycel switch`. No reinstall needed — all supported DEs are present in every ISO.
+
 ## Building
 
 ```sh
@@ -238,11 +262,14 @@ cd mycel     && cargo build --release && cd ..
 cd mycel-pkg && cargo build --release && cd ..
 cd fessus/fessus-init && cargo build --release && cd ../..
 
-# Build the ISO (downloads Arch packages as binary source, no Arch installed)
-cd mycel-iso && sudo bash build.sh
+# Build a specific ISO profile
+cd mycel-iso
+sudo bash build.sh                    # FessusDE (default)
+sudo bash build.sh --profile plasma   # KDE Plasma
+sudo bash build.sh --profile minimal  # headless, no DE
 ```
 
-The ISO boots directly into FessusDE. Click the installer icon on the desktop to install to disk. Installation is fully offline — no network required.
+Each ISO boots to the live session and includes the Calamares installer. Installation is fully offline — no network required.
 
 ## Status
 
@@ -252,9 +279,11 @@ MycelOS is in active early development. The core systems are functional:
 - s6-rc service graph with proper dependency ordering and readiness notification
 - s6-linux-init as PID 1 — clean shutdown and reboot
 - Calamares offline installer with custom modules
-- FessusDE desktop generates from `fessus.toml`
-- 70+ community package recipes
-- Generation snapshots with btrfs rollback
+- 8 ISO profiles: FessusDE, Plasma, GNOME, Cinnamon, XFCE, Budgie, MATE, Minimal
+- Switch desktop environments without reinstalling — just edit `mycel.toml`
+- FessusDE + Hyprland both supported; themes via `mycel theme`
+- 70+ community package recipes including AppImage support
+- Generation snapshots with btrfs rollback — `mycel rollback` works live
 - `mycel doctor` for system health checks
 
 A bootable ISO is the current focus.

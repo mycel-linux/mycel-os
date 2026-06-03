@@ -4,6 +4,9 @@
 # Builds the live filesystem from scratch.
 # Arch Linux packages are used as a BUILD-TIME binary source only.
 # The final rootfs runs on s6 + mycel-pkg — no Arch tooling is present.
+#
+# Usage: bootstrap.sh [--profile <name>]
+#   Profiles: fessus (default), plasma, gnome, cinnamon, xfce, budgie, mate, minimal
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,6 +15,26 @@ PKG_CACHE="$SCRIPT_DIR/build/pkg-cache"
 RECIPES="$SCRIPT_DIR/../community/recipes"
 MYCEL_PKG="$SCRIPT_DIR/../mycel-pkg/target/release/mycel-pkg"
 FESSUS_INIT="$SCRIPT_DIR/../fessus/fessus-init/target/release/fessus-init"
+
+# ─── Profile selection ────────────────────────────────────────────────────────
+
+PROFILE="fessus"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --profile) PROFILE="$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+
+PROFILE_FILE="$SCRIPT_DIR/profiles/${PROFILE}.sh"
+[ -f "$PROFILE_FILE" ] || { echo "unknown profile '$PROFILE'"; exit 1; }
+# shellcheck source=/dev/null
+source "$PROFILE_FILE"
+
+# Stub so profiles that don't define extras don't break
+install_de_packages() { true; }
+profile_desktop_section() { echo '[desktop]'; echo 'environment = "fessus"'; }
+# Override stubs with profile definitions (already sourced above)
 
 ARCH_MIRROR="https://geo.mirror.pkgbuild.com/extra/os/x86_64"
 
@@ -44,8 +67,7 @@ create_skeleton() {
     mkdir -p "$ROOT/usr/share/fonts" "$ROOT/usr/share/mycel"
     mkdir -p "$ROOT/usr/include" "$ROOT/usr/local"
     mkdir -p "$ROOT/etc/s6/sv"
-    mkdir -p "$ROOT/etc/mycel" "$ROOT/etc/fastfetch" "$ROOT/etc/sway"
-    mkdir -p "$ROOT/etc/waybar" "$ROOT/etc/dunst"
+    mkdir -p "$ROOT/etc/mycel" "$ROOT/etc/fastfetch"
     mkdir -p "$ROOT/var/lib/mycel/packages" "$ROOT/var/log" "$ROOT/var/run" "$ROOT/var/tmp"
     mkdir -p "$ROOT/proc" "$ROOT/sys" "$ROOT/dev/pts" "$ROOT/dev/shm"
     mkdir -p "$ROOT/run" "$ROOT/tmp" "$ROOT/home/live/.config"
@@ -195,42 +217,24 @@ install_system_packages() {
         fetch_arch_pkg "$pkg"
     done
 
-    # FessusDE stack (sway)
-    for pkg in sway swaybg swaylock wlroots libwayland-client \
-                waybar dunst wofi eww; do
-        fetch_arch_pkg "$pkg"
-    done
-
-    # Hyprland stack
-    for pkg in hyprland hyprpaper hyprlock hypridle \
-                xdg-desktop-portal-hyprland; do
-        fetch_arch_pkg "$pkg"
-    done
-
-    # Terminal
+    # Terminal (always useful)
     for pkg in kitty; do
         fetch_arch_pkg "$pkg"
     done
 
-    # Wayland utilities
-    for pkg in wl-clipboard cliphist grim slurp wf-recorder \
-                xdg-desktop-portal xdg-desktop-portal-wlr xdg-utils; do
-        fetch_arch_pkg "$pkg"
-    done
+    # Desktop environment — delegated to active profile
+    install_de_packages
 
-    # GUI apps
-    for pkg in firefox thunar mousepad mpv imv \
-                zathura zathura-pdf-mupdf xarchiver \
-                blueman qalculate-gtk; do
-        fetch_arch_pkg "$pkg"
-    done
+    # X11 base — only for profiles that need it
+    if [ "${PROFILE_NEEDS_X11:-false}" = "true" ]; then
+        info "installing Xorg base for ${PROFILE_NAME}..."
+        for pkg in xorg-server xorg-xinit xorg-xrandr \
+                    xf86-video-fbdev xf86-video-vesa mesa; do
+            fetch_arch_pkg "$pkg"
+        done
+    fi
 
-    # Fonts and icons
-    for pkg in inter-font papirus-icon-theme; do
-        fetch_arch_pkg "$pkg"
-    done
-
-    # Installer
+    # Installer (always present — users click it from the live desktop)
     for pkg in calamares; do
         fetch_arch_pkg "$pkg"
     done
@@ -526,8 +530,21 @@ install_assets_and_user() {
     # Airootfs overlay (live fessus.toml, mycel.toml, s6/autologin etc.)
     cp -aT "$SCRIPT_DIR/airootfs" "$ROOT/"
 
-    # Pre-generate FessusDE configs for the live user
-    HOME="$ROOT/home/live" "$FESSUS_INIT" --apply 2>/dev/null || true
+    # Patch the live mycel.toml with the profile's desktop + services sections
+    local mycel_toml="$ROOT/etc/mycel.toml"
+    # Strip existing [desktop] and [services] sections, then append profile ones
+    awk '
+        /^\[(desktop|services)\]/ { skip=1 }
+        /^\[/ && !/^\[(desktop|services)\]/ { skip=0 }
+        !skip { print }
+    ' "$mycel_toml" > "$mycel_toml.tmp"
+    profile_desktop_section >> "$mycel_toml.tmp"
+    mv "$mycel_toml.tmp" "$mycel_toml"
+
+    # Pre-generate desktop configs for the live user (fessus only)
+    if [ "${PROFILE_ENV}" = "fessus" ] || [ "${PROFILE_ENV}" = "hyprland" ]; then
+        HOME="$ROOT/home/live" "$FESSUS_INIT" --apply 2>/dev/null || true
+    fi
 
     chown -R 1000:1000 "$ROOT/home/live"
 

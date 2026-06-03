@@ -4,7 +4,6 @@ username=$(awk -F'"' '/^\[\[users\]\]/{f=1} f && /^name/{print $2; exit}' \
 username="${username:-live}"
 uid=$(id -u "$username" 2>/dev/null || echo "1000")
 
-# Read desktop environment from mycel.toml [desktop] environment
 desktop=$(awk -F'"' '/^\[desktop\]/{f=1} f && /^environment/{print $2; exit}' \
     /etc/mycel.toml 2>/dev/null)
 desktop="${desktop:-fessus}"
@@ -13,23 +12,54 @@ mkdir -p "/run/user/$uid"
 chown "${username}:${username}" "/run/user/$uid" 2>/dev/null || true
 chmod 700 "/run/user/$uid"
 
+base_env="HOME=/home/$username USER=$username LOGNAME=$username \
+    XDG_RUNTIME_DIR=/run/user/$uid XDG_SESSION_TYPE=wayland"
+
 case "$desktop" in
+    plasma)
+        exec s6-setuidgid "$username" \
+            env $base_env XDG_CURRENT_DESKTOP=KDE \
+            dbus-run-session startplasma-wayland
+        ;;
+    gnome)
+        exec s6-setuidgid "$username" \
+            env $base_env XDG_CURRENT_DESKTOP=GNOME \
+            dbus-run-session gnome-session
+        ;;
+    budgie)
+        exec s6-setuidgid "$username" \
+            env $base_env XDG_CURRENT_DESKTOP=Budgie:GNOME \
+            dbus-run-session budgie-session
+        ;;
+    cinnamon)
+        # X11 session
+        exec s6-setuidgid "$username" \
+            env HOME="/home/$username" USER="$username" LOGNAME="$username" \
+            xinit /usr/bin/cinnamon-session -- :0 vt1 -nolisten tcp
+        ;;
+    xfce)
+        exec s6-setuidgid "$username" \
+            env HOME="/home/$username" USER="$username" LOGNAME="$username" \
+            xinit /usr/bin/startxfce4 -- :0 vt1 -nolisten tcp
+        ;;
+    mate)
+        exec s6-setuidgid "$username" \
+            env HOME="/home/$username" USER="$username" LOGNAME="$username" \
+            xinit /usr/bin/mate-session -- :0 vt1 -nolisten tcp
+        ;;
     hyprland)
-        compositor="Hyprland"
-        current_desktop="Hyprland"
+        exec s6-setuidgid "$username" \
+            env $base_env XDG_CURRENT_DESKTOP=Hyprland \
+            dbus-run-session Hyprland
+        ;;
+    none|minimal)
+        # No desktop — hand tty1 to a getty for text login
+        exec /sbin/getty -n -l /bin/login 38400 tty1
         ;;
     *)
-        # fessus, sway, or anything else → sway
-        compositor="sway"
-        current_desktop="sway"
+        # fessus / sway / anything else
+        exec s6-setuidgid "$username" \
+            env $base_env XDG_CURRENT_DESKTOP=sway \
+            dbus-run-session sway
         ;;
 esac
-
-exec s6-setuidgid "$username" \
-    env HOME="/home/$username" \
-        USER="$username" \
-        LOGNAME="$username" \
-        XDG_RUNTIME_DIR="/run/user/$uid" \
-        XDG_SESSION_TYPE=wayland \
-        XDG_CURRENT_DESKTOP="$current_desktop" \
-    dbus-run-session "$compositor"
