@@ -24,7 +24,8 @@ pub fn run(generation: &str) -> Result<()> {
     }
 
     let root_dev = btrfs::root_device()?;
-    limine::set_default(target, &root_dev, keep)?;
+    let boot_cfg = limine::BootConfig::default_if_missing();
+    limine::set_default(target, &root_dev, keep, &boot_cfg)?;
 
     if target == current {
         println!("{} generation {} (current) set as default boot target",

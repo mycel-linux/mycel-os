@@ -195,9 +195,15 @@ install_system_packages() {
         fetch_arch_pkg "$pkg"
     done
 
-    # FessusDE stack
+    # FessusDE stack (sway)
     for pkg in sway swaybg swaylock wlroots libwayland-client \
                 waybar dunst wofi eww; do
+        fetch_arch_pkg "$pkg"
+    done
+
+    # Hyprland stack
+    for pkg in hyprland hyprpaper hyprlock hypridle \
+                xdg-desktop-portal-hyprland; do
         fetch_arch_pkg "$pkg"
     done
 

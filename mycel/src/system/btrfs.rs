@@ -70,3 +70,18 @@ pub fn snapshot_size(gen: u64) -> String {
 pub fn snapshot_exists(gen: u64) -> bool {
     std::path::Path::new(&format!("{}/@gen-{}", SNAPSHOTS_DIR, gen)).exists()
 }
+
+/// Marks a snapshot as read-only so it cannot be modified after being sealed.
+pub fn set_snapshot_readonly(gen: u64) -> Result<()> {
+    let path = format!("{}/@gen-{}", SNAPSHOTS_DIR, gen);
+    if !std::path::Path::new(&path).exists() {
+        return Ok(());
+    }
+    let status = Command::new("btrfs")
+        .args(["property", "set", "-ts", &path, "ro", "true"])
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("btrfs: could not mark gen {} read-only", gen);
+    }
+    Ok(())
+}

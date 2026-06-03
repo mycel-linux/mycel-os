@@ -1,14 +1,29 @@
 #!/bin/sh
-# Read the desktop user from mycel.toml so this works after install,
-# not just in the live session.
 username=$(awk -F'"' '/^\[\[users\]\]/{f=1} f && /^name/{print $2; exit}' \
     /etc/mycel.toml 2>/dev/null)
 username="${username:-live}"
 uid=$(id -u "$username" 2>/dev/null || echo "1000")
 
+# Read desktop environment from mycel.toml [desktop] environment
+desktop=$(awk -F'"' '/^\[desktop\]/{f=1} f && /^environment/{print $2; exit}' \
+    /etc/mycel.toml 2>/dev/null)
+desktop="${desktop:-fessus}"
+
 mkdir -p "/run/user/$uid"
 chown "${username}:${username}" "/run/user/$uid" 2>/dev/null || true
 chmod 700 "/run/user/$uid"
+
+case "$desktop" in
+    hyprland)
+        compositor="Hyprland"
+        current_desktop="Hyprland"
+        ;;
+    *)
+        # fessus, sway, or anything else → sway
+        compositor="sway"
+        current_desktop="sway"
+        ;;
+esac
 
 exec s6-setuidgid "$username" \
     env HOME="/home/$username" \
@@ -16,5 +31,5 @@ exec s6-setuidgid "$username" \
         LOGNAME="$username" \
         XDG_RUNTIME_DIR="/run/user/$uid" \
         XDG_SESSION_TYPE=wayland \
-        XDG_CURRENT_DESKTOP=sway \
-    dbus-run-session sway
+        XDG_CURRENT_DESKTOP="$current_desktop" \
+    dbus-run-session "$compositor"

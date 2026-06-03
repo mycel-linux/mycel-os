@@ -113,6 +113,18 @@ enum Commands {
 
     /// Show available package updates without applying them
     Check,
+
+    /// Roll back to a previous generation
+    Rollback {
+        /// Generation to roll back to (default: previous)
+        generation: Option<u64>,
+    },
+
+    /// Apply a colour theme to the desktop
+    Theme {
+        /// Theme name — omit to list available themes
+        name: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -137,5 +149,7 @@ fn main() -> Result<()> {
         Commands::Guide { topic }      => commands::guide::run(topic.as_deref()),
         Commands::Update               => commands::update::run(),
         Commands::Check                => commands::check::run(),
+        Commands::Rollback { generation } => commands::rollback::run(generation),
+        Commands::Theme    { name }       => commands::theme::run(name.as_deref()),
     }
 }

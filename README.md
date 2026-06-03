@@ -76,6 +76,10 @@ Run `mycel switch` to apply. Every change creates a new generation you can roll 
 |---|---|
 | `mycel switch` | Apply `mycel.toml` — packages, users, services, system config |
 | `mycel get <pkgs>` | Install packages immediately and save them to `mycel.toml` |
+| `mycel rollback` | Roll back to the previous generation — live, no reboot needed |
+| `mycel rollback <id>` | Roll back to a specific generation |
+| `mycel theme` | List available colour themes |
+| `mycel theme <name>` | Apply a colour theme to the desktop instantly |
 | `mycel update` | Pull latest overlay cache |
 | `mycel check` | Show available updates without applying |
 | `mycel doctor` | Check system health — services, config, DB, disk |
@@ -133,12 +137,19 @@ binaries = [{ from = "btop/bin/btop", to = "btop" }]
 
 ## FessusDE
 
-FessusDE is a Wayland-native desktop for low-to-mid range hardware. It composes sway, waybar, eww, dunst, and wofi into a cohesive experience configured entirely from `~/.config/fessus.toml`.
+FessusDE is a Wayland-native desktop for low-to-mid range hardware. It composes your chosen compositor with waybar, eww, dunst, and wofi into a cohesive experience configured entirely from `~/.config/fessus.toml`.
 
-Its signature feature is the **radial corner menu** — a hot-corner launcher that fans your pinned apps in a quarter-circle arc, toggled with `Super+r`.
+Its signature feature is the **radial corner menu** — a launcher that fans your pinned apps in a quarter-circle arc, toggled with `Super+r`.
+
+Two compositors are supported:
+- `compositor = "sway"` — stable, minimal, keyboard-driven
+- `compositor = "hyprland"` — animations, gestures, actively hyped
+
+Switch between them by editing `fessus.toml` and running `mycel edit fessus` — no reinstall needed.
 
 ```toml
 [fessus]
+compositor   = "hyprland"
 accent_color = "#3F549E"
 theme        = "dark"
 font         = "Inter"

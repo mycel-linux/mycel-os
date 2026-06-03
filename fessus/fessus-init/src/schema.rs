@@ -16,6 +16,7 @@ pub struct FessusConfig {
 
 #[derive(Deserialize, Debug)]
 pub struct Fessus {
+    pub compositor:    Option<String>,  // "sway" (default) or "hyprland"
     pub accent_color:  String,
     pub theme:         String,
     pub font:          String,

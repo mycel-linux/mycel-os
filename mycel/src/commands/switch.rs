@@ -117,8 +117,18 @@ pub fn run() -> Result<()> {
     if btrfs::is_btrfs_root() {
         pb.set_message("updating boot menu...");
         if let Ok(root_dev) = btrfs::root_device() {
-            limine::write(gen, &root_dev, keep).ok();
+            let boot_cfg = limine::BootConfig {
+                timeout:        config.boot.timeout,
+                extra_cmdline:  &config.boot.cmdline,
+            };
+            limine::write(gen, &root_dev, keep, &boot_cfg).ok();
         }
+    }
+
+    // ── 12. Immutability — mark previous snapshot read-only ───────────────────
+    if config.system.immutable && btrfs::is_btrfs_root() && gen > 1 {
+        pb.set_message("sealing previous generation...");
+        btrfs::set_snapshot_readonly(gen - 1).ok();
     }
 
     pb.finish_and_clear();
@@ -288,6 +298,9 @@ fn apply_system_config(sys: &System) -> Result<()> {
     fs::write("/etc/hostname", format!("{}\n", sys.hostname))?;
     Command::new("hostname").arg(&sys.hostname).status().ok();
 
+    // Kernel profile — set CPU frequency governor
+    apply_kernel_profile(&sys.kernel);
+
     // Timezone — symlink /etc/localtime to the right zone file
     let zone_path = format!("/usr/share/zoneinfo/{}", sys.timezone);
     if std::path::Path::new(&zone_path).exists() {
@@ -312,6 +325,25 @@ fn apply_system_config(sys: &System) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn apply_kernel_profile(profile: &str) {
+    let governor = match profile {
+        "performance" => "performance",
+        "battery"     => "powersave",
+        "balanced"    => "schedutil",
+        _             => return, // "auto" or unknown — leave as-is
+    };
+
+    // Write to every CPU's governor sysfs entry
+    if let Ok(cpus) = fs::read_dir("/sys/devices/system/cpu") {
+        for cpu in cpus.flatten() {
+            let gov_path = cpu.path().join("cpufreq/scaling_governor");
+            if gov_path.exists() {
+                fs::write(&gov_path, governor).ok();
+            }
+        }
+    }
 }
 
 const S6_RC_LIVE: &str = "/run/s6-rc";

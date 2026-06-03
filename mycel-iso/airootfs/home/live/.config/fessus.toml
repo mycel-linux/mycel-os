@@ -1,4 +1,5 @@
 [fessus]
+compositor   = "sway"
 accent_color = "#3F549E"
 theme = "dark"
 font = "Inter"

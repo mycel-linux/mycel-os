@@ -37,6 +37,20 @@ pub fn run(package: &str) -> Result<()> {
         println!("{}", "ok".green());
     }
 
+    // AppImage — handle separately: place in /opt/appimages/, create wrapper
+    if is_appimage(&archive) {
+        let installed_files = install_appimage(&archive, name, &recipe, &tmp)?;
+        let record = InstalledPackage {
+            name: name.clone(), version: ver.clone(),
+            installed_at: Utc::now().to_rfc3339(),
+            files: InstalledFiles { installed: installed_files },
+        };
+        db::register(&record)?;
+        fs::remove_dir_all(&tmp).ok();
+        println!("{} installed {}", "ok".green().bold(), name.bold());
+        return Ok(());
+    }
+
     // Extract
     let src_dir = format!("{}/src", tmp);
     extract::extract(&archive, &src_dir)?;
@@ -148,6 +162,110 @@ fn parse_binary_entry(val: &toml::Value, work_dir: &str) -> (String, String) {
         }
         _ => (String::new(), String::new()),
     }
+}
+
+fn is_appimage(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    if lower.ends_with(".appimage") { return true; }
+    // Check magic bytes: ELF + AppImage type 2 marker at offset 8
+    if let Ok(mut f) = std::fs::File::open(path) {
+        use std::io::Read;
+        let mut buf = [0u8; 12];
+        if f.read_exact(&mut buf).is_ok() {
+            // ELF magic + AI\x02 at offset 8
+            return buf[0..4] == [0x7f, b'E', b'L', b'F']
+                && buf[8..11] == [0x41, 0x49, 0x02];
+        }
+    }
+    false
+}
+
+fn install_appimage(
+    src: &str,
+    name: &str,
+    recipe: &crate::package::schema::Recipe,
+    tmp: &str,
+) -> Result<Vec<String>> {
+    let root    = system_root();
+    let appdir  = format!("{}/opt/appimages", root);
+    let bindir  = format!("{}/usr/bin", root);
+    let appfile = format!("{}/{}.AppImage", appdir, name);
+    let wrapper = format!("{}/{}", bindir, name);
+
+    fs::create_dir_all(&appdir)?;
+    fs::create_dir_all(&bindir)?;
+    fs::copy(src, &appfile)?;
+    fs::set_permissions(&appfile, fs::Permissions::from_mode(0o755))?;
+
+    // Wrapper script so the binary appears in PATH normally
+    fs::write(&wrapper, format!(
+        "#!/bin/sh\nexec {appfile} \"$@\"\n",
+        appfile = appfile
+    ))?;
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755))?;
+    println!("  {} {}", "→".blue(), wrapper.dimmed());
+    println!("  {} {}", "→".blue(), appfile.dimmed());
+
+    let mut installed = vec![appfile.clone(), wrapper.clone()];
+
+    // Try to extract .desktop and icon from the AppImage
+    let extract_dir = format!("{}/appimage-extract", tmp);
+    let extracted = Command::new(&appfile)
+        .arg("--appimage-extract")
+        .current_dir(tmp)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if extracted {
+        let squash = format!("{}/squashfs-root", tmp);
+
+        // Copy .desktop file
+        if let Ok(entries) = fs::read_dir(&squash) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().and_then(|e| e.to_str()) == Some("desktop") {
+                    let dest = format!("{}/usr/share/applications/{}.desktop", root, name);
+                    fs::create_dir_all(format!("{}/usr/share/applications", root)).ok();
+                    fs::copy(&p, &dest).ok();
+                    installed.push(dest);
+                    break;
+                }
+            }
+        }
+
+        // Copy icon (look for .png or .svg in squashfs-root)
+        for icon_name in &[
+            format!("{}.png", name),
+            format!("{}.svg", name),
+            ".DirIcon".to_string(),
+        ] {
+            let icon_src = format!("{}/{}", squash, icon_name);
+            if Path::new(&icon_src).exists() {
+                let ext = if icon_src.ends_with(".svg") { "svg" } else { "png" };
+                let dest = format!("{}/usr/share/icons/hicolor/256x256/apps/{}.{}",
+                    root, name, ext);
+                fs::create_dir_all(std::path::Path::new(&dest).parent().unwrap()).ok();
+                fs::copy(&icon_src, &dest).ok();
+                installed.push(dest);
+                break;
+            }
+        }
+    }
+
+    // Fall back to recipe desktop entry if extraction didn't produce one
+    if let Some(desktop) = &recipe.desktop {
+        let dest = format!("{}/usr/share/applications/{}.desktop", root, name);
+        if !Path::new(&dest).exists() {
+            fs::create_dir_all(format!("{}/usr/share/applications", root)).ok();
+            fs::write(&dest, generate_desktop(name, desktop)).ok();
+            installed.push(dest);
+        }
+    }
+
+    Ok(installed)
 }
 
 fn generate_desktop(name: &str, d: &crate::package::schema::Desktop) -> String {
