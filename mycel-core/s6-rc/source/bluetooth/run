@@ -1,2 +1,3 @@
 #!/bin/sh
-exec bluetoothd --noplugin=sap
+# bluetoothd lives in /usr/lib/bluetooth, which is not in PATH.
+exec /usr/lib/bluetooth/bluetoothd --noplugin=sap

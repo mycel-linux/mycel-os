@@ -4,34 +4,34 @@
   <p>Independent. Declarative. s6.</p>
 
   ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
-  ![Status](https://img.shields.io/badge/status-early%20development-orange)
+  ![Status](https://img.shields.io/badge/status-boots%20to%20plasma-brightgreen)
   ![Init](https://img.shields.io/badge/init-s6-purple)
   ![Platform](https://img.shields.io/badge/platform-x86__64-lightgrey)
 </div>
 
 ---
 
-MycelOS is an independent Linux distribution built from scratch. Not a fork. Not based on anything. It runs on **s6** — a modern, actively maintained process supervision suite — and is driven by a single declarative file: `mycel.toml`.
+MycelOS is an independent Linux distribution built from scratch. Not a fork. Not based on anything. It runs on **s6** — a modern, actively maintained process supervision suite — driven by a single declarative file (`mycel.toml`), and boots to a full **KDE Plasma** desktop.
 
-No systemd. No runit. No OpenRC. Just s6 — fast, clean, and built for the future.
+No systemd. No runit. No OpenRC. The C runtime is glibc, the init is s6-linux-init as PID 1, services are dependency-ordered by s6-rc, and logind is provided by elogind — a complete, modern, systemd-free desktop stack.
 
 ## Why s6?
 
-The anti-systemd space is crowded but stagnant. Void Linux and Artix run runit — a supervision suite last seriously updated in 2004. Alpine and Gentoo run OpenRC — a service manager, not a real supervisor. These are respected choices but they are old choices.
+The anti-systemd space is crowded but stagnant. Void and Artix run runit — a supervision suite last seriously updated in 2004. Alpine and Gentoo run OpenRC — a service manager, not a real supervisor. Respected, but old.
 
-s6 is different. Written by Laurent Bercot and actively maintained, s6 is a proper process supervision suite with clean C code, real dependency handling via s6-rc, and a design that hasn't accumulated 20 years of technical debt. MycelOS is one of the first independent distributions to be built ground-up with s6 as the init system.
+s6, written by Laurent Bercot and actively maintained, is a proper process supervision suite: clean C, real dependency handling via s6-rc, and a design with none of the accumulated debt. MycelOS is one of the first independent distributions built ground-up on s6 — and built genuinely from scratch: the entire userland is assembled from upstream binary packages and source, with the skarnet suite (skalibs/execline/s6/s6-rc/s6-linux-init) compiled from source at build time.
 
-If you are done with systemd and done with aging alternatives, MycelOS is built for you.
-
-## The full stack
+## The stack
 
 | Component | Choice | Why |
 |---|---|---|
-| Init | **s6 + s6-rc** | Modern, actively maintained, proper dependency-ordered supervision |
-| Packages | **mycel-pkg + .myc** | Own format, GitHub-native, no foreign tooling |
+| Init | **s6-linux-init + s6-rc** | Modern, actively maintained, dependency-ordered supervision; clean shutdown/reboot |
+| Login/seat | **elogind + seatd** | Standalone logind (`login1`) + seat management, no systemd |
+| C runtime | **glibc** | The one and only libc — full binary compatibility |
+| Desktop | **KDE Plasma 6** | Stable, polished, Wayland. Other DEs available as separate editions |
+| Packages | **mycel-pkg + .myc** | Own format, GitHub-native, no foreign tooling on the installed system |
 | Config | **mycel.toml** | One file declares your entire system |
-| Desktop | **FessusDE** | Lightweight Wayland compositor built on sway |
-| Installer | **Calamares** | Offline GUI install, no command line required |
+| Installer | **Calamares** | Offline GUI install — copies the live squashfs, no network needed |
 | Bootloader | **Limine** | Modern, fast, BIOS + UEFI |
 
 ## mycel.toml
@@ -51,12 +51,10 @@ install = ["firefox", "kitty", "git", "btop", "neovim"]
 lock    = ["firefox"]
 
 [overlays]
-sources = [
-  "github:mycel-linux/community",
-]
+sources = ["github:mycel-linux/community"]
 
 [desktop]
-environment = "fessus"
+environment = "plasma"
 
 [services]
 enable = ["pipewire", "wireplumber", "NetworkManager", "bluetooth"]
@@ -70,32 +68,43 @@ password_hash = ""
 
 Run `mycel switch` to apply. Every change creates a new generation you can roll back to.
 
+## Desktops
+
+MycelOS ships **one ISO per desktop** (the Artix model) — pick your edition, download only what you need, install fully offline. KDE Plasma is the flagship.
+
+| Edition | Desktop | Session |
+|---|---|---|
+| **plasma** (default) | KDE Plasma 6 | Wayland |
+| gnome | GNOME | Wayland |
+| cinnamon | Cinnamon | X11 |
+| xfce | XFCE | X11 |
+| budgie | Budgie | Wayland |
+| mate | MATE | X11 |
+| sway | minimal tiling sway | Wayland |
+| minimal | none (TTY) | — |
+
+Because the system is declarative, the desktop isn't locked at install. Change `[desktop] environment` in `mycel.toml`, run `mycel switch`, log back in — the session launcher dispatches to whichever DE you named.
+
 ## mycel CLI
 
 | Command | Description |
 |---|---|
-| `mycel switch` | Apply `mycel.toml` — packages, users, services, system config |
-| `mycel get <pkgs>` | Install packages immediately and save them to `mycel.toml` |
-| `mycel rollback` | Roll back to the previous generation — live, no reboot needed |
+| `mycel switch` | Apply `mycel.toml` — packages, users, services, hostname/locale/timezone |
+| `mycel get <pkgs>` | Install packages now and save them to `mycel.toml` |
+| `mycel rollback` | Roll back to the previous generation — live, no reboot |
 | `mycel rollback <id>` | Roll back to a specific generation |
-| `mycel theme` | List available colour themes |
-| `mycel theme <name>` | Apply a colour theme to the desktop instantly |
-| `mycel update` | Pull latest overlay cache |
-| `mycel check` | Show available updates without applying |
-| `mycel doctor` | Check system health — services, config, DB, disk |
-| `mycel boot <id>` | Set boot generation for next restart |
+| `mycel theme [name]` | List / apply a colour theme to the desktop |
+| `mycel update` / `mycel check` | Pull overlay cache / show available updates |
+| `mycel doctor` | Health check — services, config, package DB, disk |
+| `mycel boot <id>` | Set the boot generation for next restart |
 | `mycel edit` | Open `mycel.toml` in `$EDITOR` |
-| `mycel edit fessus` | Open `fessus.toml` — desktop changes apply on save |
-| `mycel network` | List all system generations |
-| `mycel active` | Show current system state |
+| `mycel network` / `mycel active` | List generations / show current system state |
 | `mycel diff <a> <b>` | Compare packages between two generations |
-| `mycel purge` | Garbage collect old generations |
-| `mycel isolate <id>` | Pin a generation so purge skips it |
-| `mycel release <id>` | Unpin a generation |
-| `mycel lock <pkg>` | Pin a package across rollbacks |
-| `mycel unlock <pkg>` | Remove a package pin |
+| `mycel purge` | Garbage-collect old generations |
+| `mycel isolate <id>` / `mycel release <id>` | Pin / unpin a generation |
+| `mycel lock <pkg>` / `mycel unlock <pkg>` | Pin / unpin a package across rollbacks |
 | `mycel spore <pkgs>` | Ephemeral shell with extra packages — vanishes on exit |
-| `mycel spread --export <path>` | Export config for fresh install |
+| `mycel spread --export <path>` | Export config for a fresh install |
 | `mycel guide` | Built-in guide for new users |
 
 ## The .myc package format
@@ -122,95 +131,48 @@ checksum = "sha256:..."
 binaries = [{ from = "btop/bin/btop", to = "btop" }]
 ```
 
-### mycel-pkg commands
+`mycel-pkg` handles install/remove/search/list/info/verify/build/submit, supports source builds (make/cmake/meson/cargo/go) and AppImages, and verifies checksums. The community overlay (`mycel-linux/community`) ships 70+ recipes.
 
-| Command | Description |
-|---|---|
-| `mycel-pkg install <recipe>` | Install a package from a .myc file |
-| `mycel-pkg remove <name>` | Remove an installed package |
-| `mycel-pkg search <query>` | Search recipes in cached overlays |
-| `mycel-pkg list` | List all installed packages |
-| `mycel-pkg info <recipe>` | Show package metadata |
-| `mycel-pkg verify <recipe>` | Validate a .myc recipe |
-| `mycel-pkg build <recipe>` | Build a binary .mpkg from a source recipe |
-| `mycel-pkg submit <recipe>` | Get submission instructions for the community index |
+## How services work
 
-## FessusDE
+Services are defined in `mycel.toml` and managed at runtime by **s6-rc** from a compiled dependency graph, so they start in the right order:
 
-FessusDE is a Wayland-native desktop for low-to-mid range hardware. It composes your chosen compositor with waybar, eww, dunst, and wofi into a cohesive experience configured entirely from `~/.config/fessus.toml`.
-
-Its signature feature is the **radial corner menu** — a launcher that fans your pinned apps in a quarter-circle arc, toggled with `Super+r`.
-
-Two compositors are supported:
-- `compositor = "sway"` — stable, minimal, keyboard-driven
-- `compositor = "hyprland"` — animations, gestures, actively hyped
-
-Switch between them by editing `fessus.toml` and running `mycel edit fessus` — no reinstall needed.
-
-```toml
-[fessus]
-compositor   = "hyprland"
-accent_color = "#3F549E"
-theme        = "dark"
-font         = "Inter"
-
-[radial]
-corner = "bottom-left"
-pinned = ["firefox", "thunar", "kitty", "mpv"]
-
-[keybindings]
-mod      = "Super"
-terminal = "kitty"
+```
+udevd → udev-trigger → dbus → elogind → seatd → pipewire → wireplumber → desktop
 ```
 
-`mycel edit fessus` — changes apply instantly on save.
-
-## s6 service management
-
-Services are defined in `mycel.toml` and managed at runtime by s6-rc. MycelOS uses a compiled dependency graph so services start in the right order — udevd before dbus, dbus and seatd before pipewire, pipewire before wireplumber, everything before the desktop.
+`mycel switch` brings services up or down immediately via `s6-rc change` — no reboot. The init itself is **s6-linux-init** as PID 1, which means `reboot`/`poweroff` work cleanly.
 
 ```toml
 [services]
-enable = [
-  "pipewire",
-  "wireplumber",
-  "NetworkManager",
-  "bluetooth",
-  "cronie",
-]
+enable = ["pipewire", "wireplumber", "NetworkManager", "bluetooth", "cronie"]
 ```
 
-Running `mycel switch` after changing the services list starts or stops services immediately without rebooting.
-
-## Channels
-
-```toml
-[system]
-channel = "stable"    # stable or unstable
-```
-
-- **stable** — tested releases, recommended for most users
-- **unstable** — tracks `main`, bleeding edge
-
-`mycel update` pulls the latest packages for your channel. `mycel check` shows what would change without applying it.
-
-## Community packages
-
-Anyone can package software for MycelOS. The community overlay lives at `mycel-linux/community` and already includes 70+ packages. See [community/CONTRIBUTING.md](community/CONTRIBUTING.md).
-
-```toml
-[overlays]
-sources = [
-  "github:mycel-linux/community",
-  "github:yourname/your-packages",
-]
-```
-
-Publish your own recipe:
+## Building
 
 ```sh
-mycel-pkg verify myapp.myc    # check it first
-mycel-pkg submit myapp.myc    # get submission instructions
+# 1. Build the Rust tools
+cd mycel     && cargo build --release && cd ..
+cd mycel-pkg && cargo build --release && cd ..
+cd fessus/fessus-init && cargo build --release && cd ../..
+
+# 2. Build an ISO (downloads upstream packages as a build-time binary source;
+#    the skarnet s6 suite is compiled from source. No pacman in the result.)
+cd mycel-iso
+sudo bash build.sh                    # KDE Plasma (default)
+sudo bash build.sh --profile gnome    # GNOME edition
+sudo bash build.sh --profile minimal  # headless, no DE
+```
+
+Build host needs: a Rust toolchain, `gcc`/`make`, `curl`, `squashfs-tools`, `libisoburn` (xorriso), `dracut`, `limine`. Each ISO boots to the live desktop with the Calamares installer; installation copies the squashfs straight to disk and is fully offline.
+
+Test in QEMU (UEFI + GPU acceleration for the Wayland compositor):
+
+```sh
+qemu-system-x86_64 -enable-kvm -m 4G -smp 2 \
+  -cdrom mycel-iso/build/MycelOS-1.0-plasma-x86_64.iso \
+  -bios /usr/share/edk2/x64/OVMF.4m.fd \
+  -device virtio-vga-gl -display gtk,gl=on
 ```
 
 ## Repo structure
@@ -221,72 +183,31 @@ mycel-os/
   mycel-pkg/          # Package manager (Rust)
   mycel-core/
     s6-rc/            # s6-rc service source definitions
-    s6-linux-init/    # PID 1 init stage scripts
+    s6-linux-init/    # PID 1 stage scripts (rc.init / rc.shutdown)
     assets/           # logos, wallpaper
-    etc/              # base configs (fastfetch, etc.)
-  fessus/             # FessusDE config generator (Rust)
-  mycel-installer/    # Calamares offline installer config
-  mycel-iso/          # ISO build scripts (bootstrap.sh + build.sh)
-  community/          # Community overlay index + recipes
+  fessus/             # minimal sway config generator (Rust)
+  mycel-installer/    # Calamares offline installer config + custom modules
+  mycel-iso/          # ISO build system
+    bootstrap.sh      # assembles the rootfs from scratch
+    build.sh          # squashfs + initramfs + ISO
+    profiles/         # one file per desktop edition
+  community/          # community overlay index + .myc recipes
 ```
-
-## ISO Profiles
-
-MycelOS ships one ISO build system with multiple profiles. Each builds a separate ISO pre-loaded with a different desktop environment.
-
-| Profile | Desktop | Session type | Command |
-|---|---|---|---|
-| `fessus` | FessusDE (sway + Hyprland) | Wayland | `build.sh` |
-| `plasma` | KDE Plasma 6 | Wayland | `build.sh --profile plasma` |
-| `gnome` | GNOME | Wayland | `build.sh --profile gnome` |
-| `cinnamon` | Cinnamon | X11 | `build.sh --profile cinnamon` |
-| `xfce` | XFCE | X11 | `build.sh --profile xfce` |
-| `budgie` | Budgie | Wayland | `build.sh --profile budgie` |
-| `mate` | MATE | X11 | `build.sh --profile mate` |
-| `minimal` | None | TTY | `build.sh --profile minimal` |
-
-Switch desktop environments after install by editing `mycel.toml`:
-
-```toml
-[desktop]
-environment = "plasma"   # plasma, gnome, hyprland, fessus, cinnamon, xfce, budgie, mate, none
-```
-
-Then run `mycel switch`. No reinstall needed — all supported DEs are present in every ISO.
-
-## Building
-
-```sh
-# Build Rust tools first
-cd mycel     && cargo build --release && cd ..
-cd mycel-pkg && cargo build --release && cd ..
-cd fessus/fessus-init && cargo build --release && cd ../..
-
-# Build a specific ISO profile
-cd mycel-iso
-sudo bash build.sh                    # FessusDE (default)
-sudo bash build.sh --profile plasma   # KDE Plasma
-sudo bash build.sh --profile minimal  # headless, no DE
-```
-
-Each ISO boots to the live session and includes the Calamares installer. Installation is fully offline — no network required.
 
 ## Status
 
-MycelOS is in active early development. The core systems are functional:
+**MycelOS boots to a working KDE Plasma 6 desktop** — from a from-scratch rootfs, on s6-linux-init as PID 1, with no systemd.
 
-- CLI tools (`mycel`, `mycel-pkg`) build and run
-- s6-rc service graph with proper dependency ordering and readiness notification
-- s6-linux-init as PID 1 — clean shutdown and reboot
-- Calamares offline installer with custom modules
-- 8 ISO profiles: FessusDE, Plasma, GNOME, Cinnamon, XFCE, Budgie, MATE, Minimal
-- Switch desktop environments without reinstalling — just edit `mycel.toml`
-- FessusDE + Hyprland both supported; themes via `mycel theme`
-- 70+ community package recipes including AppImage support
-- Generation snapshots with btrfs rollback — `mycel rollback` works live
-- `mycel doctor` for system health checks
+Working today:
+- Full boot chain: Limine → dracut live squashfs → s6-linux-init → s6-rc service graph → elogind/seatd/dbus/pipewire → PAM-registered logind session → Plasma
+- `mycel` / `mycel-pkg` CLI tools build and run
+- Dependency-resolving build system (full `%DEPENDS%`/`%PROVIDES%` closure)
+- skarnet s6 suite built from source; elogind for logind on a no-systemd system
+- Per-edition ISOs (Plasma default; GNOME, XFCE, Cinnamon, Budgie, MATE, sway, minimal)
+- Generation snapshots + live `mycel rollback`; `mycel doctor` health checks
+- 70+ community package recipes
 
-A bootable ISO is the current focus.
+In progress: Calamares install end-to-end verification, per-edition branding, wiring the MycelOS wallpaper/theme into Plasma, and declarative kernel selection.
 
 ## License
 

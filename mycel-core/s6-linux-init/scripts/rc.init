@@ -1,29 +1,59 @@
 #!/bin/sh
-# Stage 2 — called by s6-linux-init after svscan is running.
-# Brings up all services in dependency order via s6-rc.
+# Stage 2 — run by s6-linux-init after s6-svscan is supervising the scandir.
+# Early filesystem mounts (/proc, /sys, /dev, /run) are already done by
+# s6-linux-init stage 1, so we only handle the rest here.
 
-# Mount remaining filesystems
-mount -t tmpfs tmpfs /run/user 2>/dev/null || true
+# Per-user runtime dir parent + fstab mounts (tmpfs /tmp, /dev/shm)
+mkdir -p /run/user
 mount -a 2>/dev/null || true
 
-# Seed entropy
+# cgroup v2 — REQUIRED by elogind/logind. Without it elogind crash-loops with
+# "Cannot determine cgroup we are running in: No medium found".
+if [ ! -e /sys/fs/cgroup/cgroup.controllers ]; then
+    mkdir -p /sys/fs/cgroup
+    mount -t cgroup2 cgroup2 /sys/fs/cgroup 2>/dev/null || true
+fi
+
+# machine-id — dbus refuses to spawn a (session) bus without it: "Cannot spawn
+# a message bus without a machine-id". That single missing file breaks the
+# entire desktop session. Generate one on the live system if it's absent.
+if [ ! -s /etc/machine-id ]; then
+    dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null \
+        || dbus-uuidgen 2>/dev/null > /etc/machine-id
+fi
+mkdir -p /var/lib/dbus
+ln -sf /etc/machine-id /var/lib/dbus/machine-id
+
+# tmpfiles that systemd-tmpfiles would normally create. Without /tmp/.X11-unix
+# Xwayland can't make its socket and kwin tears the whole session down:
+# "kwin_xwl: /tmp/.X11-unix does not exist".
+mkdir -p /tmp/.X11-unix /tmp/.ICE-unix /run/lock
+chmod 1777 /tmp/.X11-unix /tmp/.ICE-unix
+
+# Seed entropy from last boot's saved seed
 [ -f /var/lib/misc/random-seed ] && \
-    cat /var/lib/misc/random-seed > /dev/urandom
+    cat /var/lib/misc/random-seed > /dev/urandom 2>/dev/null
 
-# Set hostname
-[ -f /etc/hostname ] && hostname -F /etc/hostname
+# Hostname. Write straight to the kernel via /proc so we don't depend on the
+# `hostname` binary being installed. Arch's kernel hardcodes the default to
+# "archlinux", which must not leak into MycelOS.
+if [ -r /etc/hostname ]; then
+    cat /etc/hostname > /proc/sys/kernel/hostname 2>/dev/null
+fi
 
-# Apply locale
-[ -f /etc/locale.conf ] && . /etc/locale.conf && export LANG
+# Locale
+[ -f /etc/locale.conf ] && . /etc/locale.conf 2>/dev/null && export LANG
 
-# ── First-boot setup ──────────────────────────────────────────────────────────
+# ── First-boot setup (runs once after install) ────────────────────────────────
 if [ ! -f /var/lib/mycel/firstboot.done ]; then
     mkdir -p /var/lib/mycel
 
     # Generate locales if the installer wrote /etc/locale.gen
-    [ -f /etc/locale.gen ] && locale-gen 2>/dev/null || true
+    if [ -f /etc/locale.gen ]; then
+        locale-gen 2>/dev/null || true
+    fi
 
-    # Re-generate desktop configs for the installed user
+    # Regenerate desktop configs for the installed user
     username=$(awk -F'"' '/^\[\[users\]\]/{f=1} f && /^name/{print $2; exit}' \
         /etc/mycel.toml 2>/dev/null)
     username="${username:-live}"
@@ -34,10 +64,19 @@ if [ ! -f /var/lib/mycel/firstboot.done ]; then
 
     touch /var/lib/mycel/firstboot.done
 fi
-# ─────────────────────────────────────────────────────────────────────────────
 
-# Initialize s6-rc live state against the compiled database
-s6-rc-init -c /etc/s6-rc/compiled -l /run/s6-rc /run/service
+# ── Bring up services via s6-rc ────────────────────────────────────────────────
+# The scandir is the one s6-svscan is running on (s6-linux-init default:
+# /run/service). If this changes in a future s6-linux-init, update SCANDIR.
+SCANDIR=/run/service
 
-# Bring up the default bundle — this blocks until all services are up
-s6-rc -l /run/s6-rc -u change default
+if s6-rc-init -c /etc/s6-rc/compiled -l /run/s6-rc "$SCANDIR" 2>/dev/null; then
+    if ! s6-rc -l /run/s6-rc -u change default; then
+        echo "!! s6-rc: failed to bring up the default bundle" > /dev/console
+    fi
+else
+    # s6-rc init failed entirely — the system would otherwise have no login.
+    # Drop an emergency root getty on tty1 so the boot is still recoverable.
+    echo "!! s6-rc-init failed on $SCANDIR — starting emergency shell on tty1" > /dev/console
+    setsid -c /usr/bin/agetty -n -l /bin/sh 38400 tty1 linux &
+fi

@@ -1,0 +1,1 @@
+/bin/sh -c "udevadm trigger --type=subsystems --action=add; udevadm trigger --type=devices --action=add; udevadm settle --timeout=30"

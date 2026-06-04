@@ -1,2 +1,2 @@
 #!/bin/sh
-exec /sbin/getty -n -l /bin/login 38400 tty2
+exec /usr/bin/agetty -n -l /bin/login 38400 tty2 linux

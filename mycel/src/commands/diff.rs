@@ -22,20 +22,25 @@ pub fn run(gen1: &str, gen2: &str) -> Result<()> {
     let pkgs_b = read_packages(b, current)
         .with_context(|| format!("could not read packages for generation {}", b))?;
 
-    let names_a: HashSet<&str> = pkgs_a.keys().map(|s| s.as_str()).collect();
-    let names_b: HashSet<&str> = pkgs_b.keys().map(|s| s.as_str()).collect();
+    let names_a: HashSet<&String> = pkgs_a.keys().collect();
+    let names_b: HashSet<&String> = pkgs_b.keys().collect();
 
-    let added:   Vec<&&str> = names_b.difference(&names_a).collect();
-    let removed: Vec<&&str> = names_a.difference(&names_b).collect();
-    let common:  Vec<&&str> = names_a.intersection(&names_b).collect();
+    let mut added: Vec<&String> = names_b.difference(&names_a).copied().collect();
+    let mut removed: Vec<&String> = names_a.difference(&names_b).copied().collect();
+    added.sort();
+    removed.sort();
 
-    let upgraded: Vec<(&&str, &str, &str)> = common.iter()
+    // Packages in both, but at different versions
+    let mut upgraded: Vec<(&String, &String, &String)> = names_a
+        .intersection(&names_b)
+        .copied()
         .filter_map(|name| {
-            let va = pkgs_a[**name].as_str();
-            let vb = pkgs_b[**name].as_str();
+            let va = &pkgs_a[name];
+            let vb = &pkgs_b[name];
             if va != vb { Some((name, va, vb)) } else { None }
         })
         .collect();
+    upgraded.sort_by(|x, y| x.0.cmp(y.0));
 
     if added.is_empty() && removed.is_empty() && upgraded.is_empty() {
         println!("{} generations {} and {} are identical",
@@ -46,19 +51,15 @@ pub fn run(gen1: &str, gen2: &str) -> Result<()> {
     println!("{}", format!("Generation {} → {}", a, b).bold());
     println!("{}", "─────────────────────────────────".dimmed());
 
-    let mut added_sorted = added; added_sorted.sort();
-    let mut removed_sorted = removed; removed_sorted.sort();
-    let mut upgraded_sorted = upgraded; upgraded_sorted.sort_by_key(|(n, ..)| **n);
-
-    for name in &added_sorted {
-        let ver = &pkgs_b[***name];
+    for name in &added {
+        let ver = &pkgs_b[*name];
         println!("  {} {} {}", "+".green().bold(), name.bold(), ver.dimmed());
     }
-    for name in &removed_sorted {
-        let ver = &pkgs_a[***name];
+    for name in &removed {
+        let ver = &pkgs_a[*name];
         println!("  {} {} {}", "-".red().bold(), name.bold(), ver.dimmed());
     }
-    for (name, va, vb) in &upgraded_sorted {
+    for (name, va, vb) in &upgraded {
         println!("  {} {} {} → {}",
             "~".blue().bold(), name.bold(), va.dimmed(), vb.green());
     }

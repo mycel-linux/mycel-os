@@ -27,7 +27,7 @@ const THEMES: &[Theme] = &[
 
 pub fn run(name: Option<&str>) -> Result<()> {
     match name {
-        None       => list(),
+        None       => { list(); Ok(()) }
         Some(name) => apply(name),
     }
 }

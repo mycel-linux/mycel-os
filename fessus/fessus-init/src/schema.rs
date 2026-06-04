@@ -7,7 +7,6 @@ pub struct FessusConfig {
     pub bar:           Bar,
     pub launcher:      Launcher,
     pub notifications: Notifications,
-    pub radial:        Radial,
     pub workspaces:    Workspaces,
     pub keybindings:   Keybindings,
     pub autostart:     Option<Autostart>,
@@ -16,7 +15,6 @@ pub struct FessusConfig {
 
 #[derive(Deserialize, Debug)]
 pub struct Fessus {
-    pub compositor:    Option<String>,  // "sway" (default) or "hyprland"
     pub accent_color:  String,
     pub theme:         String,
     pub font:          String,
@@ -53,12 +51,6 @@ pub struct Notifications {
     pub position:    String,
     pub timeout:     u32,
     pub max_visible: u32,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Radial {
-    pub corner: String,
-    pub pinned: Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]

@@ -18,7 +18,12 @@ FESSUS_INIT="$SCRIPT_DIR/../fessus/fessus-init/target/release/fessus-init"
 
 # ─── Profile selection ────────────────────────────────────────────────────────
 
-PROFILE="fessus"
+# Default stubs — a profile is expected to override both of these. They are
+# defined BEFORE sourcing the profile so the profile's definitions win.
+install_de_packages()     { true; }
+profile_desktop_section() { echo '[desktop]'; echo 'environment = "fessus"'; }
+
+PROFILE="plasma"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --profile) PROFILE="$2"; shift 2 ;;
@@ -31,12 +36,9 @@ PROFILE_FILE="$SCRIPT_DIR/profiles/${PROFILE}.sh"
 # shellcheck source=/dev/null
 source "$PROFILE_FILE"
 
-# Stub so profiles that don't define extras don't break
-install_de_packages() { true; }
-profile_desktop_section() { echo '[desktop]'; echo 'environment = "fessus"'; }
-# Override stubs with profile definitions (already sourced above)
-
 ARCH_MIRROR="https://geo.mirror.pkgbuild.com/extra/os/x86_64"
+# Artix repos provide the non-systemd pieces Arch lacks (elogind, s6 services).
+ARTIX_MIRROR="https://mirrors.rit.edu/artixlinux"
 
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 step() { echo -e "\n${BLUE}::${NC} $1"; }
@@ -48,7 +50,7 @@ info() { echo -e "   → $1"; }
 
 check_deps() {
     step "checking build dependencies..."
-    for dep in curl tar zstd mksquashfs; do
+    for dep in curl tar zstd mksquashfs gcc make; do
         command -v "$dep" &>/dev/null || die "missing: $dep"
     done
     [ -x "$MYCEL_PKG" ]   || die "mycel-pkg not built — run: cd mycel-pkg && cargo build --release"
@@ -61,17 +63,26 @@ check_deps() {
 create_skeleton() {
     step "creating filesystem skeleton..."
     rm -rf "$ROOT"
-    mkdir -p "$ROOT/bin" "$ROOT/sbin" "$ROOT/lib" "$ROOT/lib64"
-    mkdir -p "$ROOT/usr/bin" "$ROOT/usr/sbin" "$ROOT/usr/lib" "$ROOT/usr/lib64"
+
+    # usr-merged layout — Arch packages install everything under /usr.
+    # /bin, /sbin, /lib, /lib64 are symlinks, exactly like a real Arch system.
+    mkdir -p "$ROOT/usr/bin" "$ROOT/usr/lib"
+    ln -s usr/bin "$ROOT/bin"
+    ln -s usr/bin "$ROOT/sbin"
+    ln -s usr/lib "$ROOT/lib"
+    ln -s usr/lib "$ROOT/lib64"
+    ln -s bin     "$ROOT/usr/sbin"
+    ln -s lib     "$ROOT/usr/lib64"
+
     mkdir -p "$ROOT/usr/share/applications" "$ROOT/usr/share/icons"
     mkdir -p "$ROOT/usr/share/fonts" "$ROOT/usr/share/mycel"
     mkdir -p "$ROOT/usr/include" "$ROOT/usr/local"
-    mkdir -p "$ROOT/etc/s6/sv"
     mkdir -p "$ROOT/etc/mycel" "$ROOT/etc/fastfetch"
-    mkdir -p "$ROOT/var/lib/mycel/packages" "$ROOT/var/log" "$ROOT/var/run" "$ROOT/var/tmp"
+    mkdir -p "$ROOT/var/lib/mycel/packages" "$ROOT/var/log" "$ROOT/var/tmp"
     mkdir -p "$ROOT/proc" "$ROOT/sys" "$ROOT/dev/pts" "$ROOT/dev/shm"
     mkdir -p "$ROOT/run" "$ROOT/tmp" "$ROOT/home/live/.config"
     mkdir -p "$ROOT/root" "$ROOT/boot" "$ROOT/mnt" "$ROOT/media" "$ROOT/opt"
+    ln -s ../run "$ROOT/var/run"
     chmod 1777 "$ROOT/tmp"
     chmod 0750 "$ROOT/root"
     mkdir -p "$PKG_CACHE"
@@ -81,6 +92,13 @@ create_skeleton() {
 # ─── 2. Arch package helper ───────────────────────────────────────────────────
 # Downloads an Arch Linux package and extracts it into the rootfs.
 # This is a BUILD-TIME operation only — pacman is never installed in the rootfs.
+
+# Index maps, populated by load_pkg_index():
+#   PKG_FILE[name]     → "repo/filename.pkg.tar.zst"
+#   PKG_DEPS[name]     → "dep1 dep2 ..."  (version constraints stripped)
+#   PKG_PROVIDER[virt] → real package name that provides the virtual dep
+declare -A PKG_FILE PKG_DEPS PKG_PROVIDER
+declare -A FETCHED
 
 setup_arch_db() {
     if [ ! -d "$PKG_CACHE/arch-db" ]; then
@@ -100,70 +118,229 @@ setup_arch_db() {
 
         ok "package database ready"
     fi
+
+    build_pkg_index
 }
 
-find_arch_pkg_filename() {
-    local pkgname="$1"
-    local desc_file
-
-    for repo in extra core; do
-        desc_file=$(find "$PKG_CACHE/arch-db/$repo" -name "desc" 2>/dev/null \
-            | xargs grep -l "^${pkgname}$" 2>/dev/null | head -1)
-        if [ -n "$desc_file" ]; then
-            local repo_found="$repo"
-            local filename
-            filename=$(awk '/^%FILENAME%/{getline; print}' "$desc_file")
-            echo "$repo_found/$filename"
-            return 0
-        fi
-    done
-    return 1
+# Single pass over all desc files → a name/filename/deps/provides index.
+build_pkg_index() {
+    if [ ! -f "$PKG_CACHE/pkgindex" ]; then
+        step "building package index (name → file, deps, provides)..."
+        find "$PKG_CACHE/arch-db" -name desc -print0 2>/dev/null \
+            | xargs -0 awk '
+                function flush() {
+                    if (name != "") {
+                        print "P\t" name "\t" repo "/" fname "\t" deps
+                        n = split(provides, pv, " ")
+                        for (i = 1; i <= n; i++)
+                            if (pv[i] != "") print "V\t" pv[i] "\t" name
+                    }
+                    name=""; fname=""; deps=""; provides=""; sec=""
+                }
+                FNR==1 { flush(); repo = (FILENAME ~ /\/core\//) ? "core" : "extra" }
+                /^%NAME%$/     { sec="N"; next }
+                /^%FILENAME%$/ { sec="F"; next }
+                /^%DEPENDS%$/  { sec="D"; next }
+                /^%PROVIDES%$/ { sec="P"; next }
+                /^%/           { sec="";  next }
+                /^$/           { next }
+                {
+                    if      (sec=="N") name=$0
+                    else if (sec=="F") fname=$0
+                    else if (sec=="D") { d=$0; gsub(/[<>=].*/,"",d); deps=deps " " d }
+                    else if (sec=="P") { p=$0; gsub(/[<>=].*/,"",p); provides=provides " " p }
+                }
+                END { flush() }
+            ' > "$PKG_CACHE/pkgindex"
+        ok "indexed $(grep -c '^P' "$PKG_CACHE/pkgindex") packages"
+    fi
 }
 
-fetch_arch_pkg() {
-    local pkgname="$1"
-    local cached
-    cached=$(find "$PKG_CACHE" -name "${pkgname}-*.pkg.tar.zst" 2>/dev/null | head -1)
+PKG_INDEX_LOADED=0
+load_pkg_index() {
+    [ "$PKG_INDEX_LOADED" = "1" ] && return   # already loaded
+    PKG_INDEX_LOADED=1
+    local t a b c
+    while IFS=$'\t' read -r t a b c; do
+        case "$t" in
+            P) PKG_FILE["$a"]="$b"; PKG_DEPS["$a"]="$c" ;;
+            V) [ -z "${PKG_PROVIDER[$a]:-}" ] && PKG_PROVIDER["$a"]="$b" ;;
+        esac
+    done < "$PKG_CACHE/pkgindex"
+}
 
-    if [ -z "$cached" ]; then
-        local result
-        result=$(find_arch_pkg_filename "$pkgname") || {
-            echo "   skip: $pkgname not in Arch repos"
-            return 0
-        }
+# Download + extract a single package archive into the rootfs.
+_extract_pkg() {
+    local name="$1" repofile="$2"
+    local repo="${repofile%%/*}" filename="${repofile##*/}"
+    local cached="$PKG_CACHE/$filename"
 
-        local repo filename
-        repo=$(dirname "$result")
-        filename=$(basename "$result")
-
-        info "fetching $pkgname..."
-        curl -sL --max-time 120 --connect-timeout 15 \
+    if [ ! -f "$cached" ]; then
+        info "fetching $name..."
+        curl -sL --max-time 180 --connect-timeout 15 \
             "https://geo.mirror.pkgbuild.com/${repo}/os/x86_64/${filename}" \
-            -o "$PKG_CACHE/$filename" || {
-            echo "   skip: download failed for $pkgname"
-            return 0
-        }
-        cached="$PKG_CACHE/$filename"
+            -o "$cached" || { echo "   skip: download failed for $name"; rm -f "$cached"; return 0; }
     fi
 
     tar -I zstd -xf "$cached" -C "$ROOT" \
-        --exclude='.PKGINFO' \
-        --exclude='.MTREE' \
-        --exclude='.BUILDINFO' \
-        --exclude='.INSTALL' \
+        --exclude='.PKGINFO' --exclude='.MTREE' \
+        --exclude='.BUILDINFO' --exclude='.INSTALL' \
         2>/dev/null || true
-
-    ok "$pkgname"
 }
 
-# ─── 4b. s6 init system ───────────────────────────────────────────────────────
+# Resolve a package name (or virtual provide) and recursively fetch its full
+# dependency closure before extracting it.
+fetch_arch_pkg() {
+    load_pkg_index
 
-install_s6() {
-    info "installing s6 supervision suite..."
-    for pkg in skalibs execline s6 s6-rc s6-linux-init; do
-        fetch_arch_pkg "$pkg"
+    local pkg="$1" real="$1"
+
+    # Resolve virtual/provided names to their real package
+    if [ -z "${PKG_FILE[$real]:-}" ] && [ -n "${PKG_PROVIDER[$real]:-}" ]; then
+        real="${PKG_PROVIDER[$real]}"
+    fi
+
+    [ -n "${FETCHED[$real]:-}" ] && return 0
+    FETCHED["$real"]=1
+
+    local repofile="${PKG_FILE[$real]:-}"
+    if [ -z "$repofile" ]; then
+        echo "   skip: $pkg not in Arch repos"
+        return 0
+    fi
+
+    # Fetch dependencies first (depth-first), then this package
+    local d
+    for d in ${PKG_DEPS[$real]:-}; do
+        fetch_arch_pkg "$d"
     done
-    ok "s6 installed"
+
+    _extract_pkg "$real" "$repofile"
+}
+
+# Fetch a single package from the Artix `system` repo and extract it. Used for
+# packages Arch doesn't ship (elogind). Dependencies are NOT resolved here —
+# callers must ensure deps (pam, dbus, libcap, etc.) are already installed from
+# the Arch set, which they are. Kept separate so Artix packages never leak into
+# the Arch dependency index and cause cross-repo provider confusion.
+ARTIX_DB_READY=0
+fetch_artix_pkg() {
+    local pkgname="$1"
+    local db="$PKG_CACHE/artix-system-db"
+
+    if [ "$ARTIX_DB_READY" = "0" ]; then
+        if [ ! -d "$db" ]; then
+            info "downloading Artix system database..."
+            mkdir -p "$db"
+            curl -sL --max-time 120 --connect-timeout 15 \
+                "$ARTIX_MIRROR/system/os/x86_64/system.db" \
+                -o "$PKG_CACHE/artix-system.db" \
+                || die "could not download Artix system.db"
+            tar -xzf "$PKG_CACHE/artix-system.db" -C "$db" 2>/dev/null || true
+        fi
+        ARTIX_DB_READY=1
+    fi
+
+    local fn
+    fn=$(find "$db" -name desc -print0 2>/dev/null | xargs -0 awk -v want="$pkgname" '
+        FNR==1 { name=""; f="" }
+        /^%FILENAME%$/ { getline; f=$0 }
+        /^%NAME%$/     { getline; name=$0 }
+        name==want && f!="" { print f; exit }
+    ' 2>/dev/null | head -1)
+    [ -n "$fn" ] || die "$pkgname not found in Artix system repo"
+
+    local cached="$PKG_CACHE/$fn"
+    if [ ! -f "$cached" ]; then
+        info "fetching $pkgname from Artix..."
+        curl -sL --max-time 180 --connect-timeout 15 \
+            "$ARTIX_MIRROR/system/os/x86_64/$fn" -o "$cached" \
+            || die "could not download $pkgname from Artix"
+    fi
+
+    tar -I zstd -xf "$cached" -C "$ROOT" \
+        --exclude='.PKGINFO' --exclude='.MTREE' \
+        --exclude='.BUILDINFO' --exclude='.INSTALL' \
+        2>/dev/null || true
+    ok "$pkgname (from Artix)"
+}
+
+# ─── 4b. s6 init system (built from skarnet source) ──────────────────────────
+# The skarnet suite (skalibs/execline/s6/s6-rc/s6-linux-init) is NOT in the
+# Arch repositories — only the AUR. Rather than depend on the AUR, we build it
+# from skarnet's source tarballs. It is tiny C with no dependencies beyond a C
+# compiler and builds in seconds. This is also more in keeping with MycelOS
+# being an independent, source-built distribution.
+
+SKALIBS_VER=2.15.0.0
+EXECLINE_VER=2.9.9.1
+S6_VER=2.15.0.0
+S6RC_VER=0.6.1.1
+S6LINUXINIT_VER=1.2.0.1
+
+build_s6_suite() {
+    info "building s6 supervision suite from source..."
+
+    local b="/tmp/mycel-s6-build"
+    rm -rf "$b"; mkdir -p "$b"
+
+    # Downstream packages find skalibs/execline/etc. that we install into $ROOT
+    local inc="$ROOT/usr/include"
+    local lib="$ROOT/usr/lib"
+
+    _s6_fetch() {  # name version
+        local name="$1" ver="$2"
+        curl -sL --max-time 120 --connect-timeout 15 \
+            "https://skarnet.org/software/${name}/${name}-${ver}.tar.gz" \
+            | tar -xz -C "$b" || die "could not download ${name}-${ver}"
+    }
+
+    # 1. skalibs — the base library everything else links against
+    _s6_fetch skalibs "$SKALIBS_VER"
+    ( cd "$b/skalibs-$SKALIBS_VER" \
+        && ./configure --prefix=/usr --libdir=/usr/lib >/dev/null \
+        && make -j"$(nproc)" >/dev/null \
+        && make DESTDIR="$ROOT" install >/dev/null ) \
+        || die "skalibs build failed"
+
+    # 2. execline — needed at runtime by s6 and s6-rc
+    _s6_fetch execline "$EXECLINE_VER"
+    ( cd "$b/execline-$EXECLINE_VER" \
+        && ./configure --prefix=/usr \
+            --with-include="$inc" --with-lib="$lib" --with-dynlib="$lib" >/dev/null \
+        && make -j"$(nproc)" >/dev/null \
+        && make DESTDIR="$ROOT" install >/dev/null ) \
+        || die "execline build failed"
+
+    # 3. s6 — the supervision suite
+    _s6_fetch s6 "$S6_VER"
+    ( cd "$b/s6-$S6_VER" \
+        && ./configure --prefix=/usr \
+            --with-include="$inc" --with-lib="$lib" --with-dynlib="$lib" >/dev/null \
+        && make -j"$(nproc)" >/dev/null \
+        && make DESTDIR="$ROOT" install >/dev/null ) \
+        || die "s6 build failed"
+
+    # 4. s6-rc — the dependency-based service manager
+    _s6_fetch s6-rc "$S6RC_VER"
+    ( cd "$b/s6-rc-$S6RC_VER" \
+        && ./configure --prefix=/usr \
+            --with-include="$inc" --with-lib="$lib" --with-dynlib="$lib" >/dev/null \
+        && make -j"$(nproc)" >/dev/null \
+        && make DESTDIR="$ROOT" install >/dev/null ) \
+        || die "s6-rc build failed"
+
+    # 5. s6-linux-init — the PID 1 frontend
+    _s6_fetch s6-linux-init "$S6LINUXINIT_VER"
+    ( cd "$b/s6-linux-init-$S6LINUXINIT_VER" \
+        && ./configure --prefix=/usr \
+            --with-include="$inc" --with-lib="$lib" --with-dynlib="$lib" >/dev/null \
+        && make -j"$(nproc)" >/dev/null \
+        && make DESTDIR="$ROOT" install >/dev/null ) \
+        || die "s6-linux-init build failed"
+
+    rm -rf "$b"
+    ok "s6 suite built and installed (skalibs, execline, s6, s6-rc, s6-linux-init)"
 }
 
 # ─── 5. System packages from Arch (build-time only) ──────────────────────────
@@ -172,16 +349,16 @@ install_system_packages() {
     step "fetching system packages (build-time binary source)..."
     setup_arch_db
 
-    # s6 supervision suite + PID 1 frontend
-    install_s6
-
-    # Kernel
-    for pkg in linux-lts linux-firmware; do
+    # glibc first — everything links against it
+    for pkg in glibc lib32-glibc; do
         fetch_arch_pkg "$pkg"
     done
 
-    # glibc — the one and only C runtime
-    for pkg in glibc lib32-glibc; do
+    # s6 supervision suite + PID 1 frontend (built from skarnet source)
+    build_s6_suite
+
+    # Kernel
+    for pkg in linux-lts linux-firmware; do
         fetch_arch_pkg "$pkg"
     done
 
@@ -192,10 +369,22 @@ install_system_packages() {
         fetch_arch_pkg "$pkg"
     done
 
-    # Core system
-    for pkg in eudev dbus seatd shadow pam; do
+    # Core system. eudev is not in Arch repos, so we pull systemd purely for
+    # its standalone udev (systemd-udevd + udevadm) and sysusers/tmpfiles
+    # helpers. systemd is NEVER PID 1 here — s6-linux-init is.
+    for pkg in systemd dbus seatd shadow pam cronie; do
         fetch_arch_pkg "$pkg"
     done
+
+    # elogind — the standalone logind (org.freedesktop.login1). Required by
+    # Plasma/GNOME for session + power management. Not in Arch; from Artix.
+    # Its deps (pam, dbus, libcap, acl, util-linux) are already installed above.
+    fetch_artix_pkg elogind
+
+    # We run elogind as an s6 service, so it always owns org.freedesktop.login1
+    # on the bus. Remove its dbus auto-activation file, otherwise dbus keeps
+    # trying to spawn duplicates ("elogind is already running as PID ...").
+    rm -f "$ROOT/usr/share/dbus-1/system-services/org.freedesktop.login1.service"
 
     # Basic userland tools
     for pkg in nano curl git wget; do
@@ -258,6 +447,36 @@ install_myc_packages() {
 
 # ─── 7. Base config files ─────────────────────────────────────────────────────
 
+# Create system users (dbus, polkitd, rtkit, seatd, ...) and the live user.
+# Arch packages declare their users in /usr/lib/sysusers.d/*.conf, normally
+# processed by a pacman hook (systemd-sysusers) that doesn't run in our
+# extraction build — so we run it ourselves, then add the live user.
+create_users() {
+    step "creating system and live users..."
+
+    # Process every package's sysusers.d to create the system accounts they need
+    chroot_run systemd-sysusers 2>/dev/null || true
+
+    # Groups the live user must belong to (create any the packages didn't)
+    for g in wheel audio video input render seat bluetooth storage network lp; do
+        chroot_run groupadd -rf "$g" 2>/dev/null || true
+    done
+
+    # Create the live user if sysusers/filesystem didn't
+    if ! chroot_run id live >/dev/null 2>&1; then
+        chroot_run useradd -m -u 1000 -s /bin/bash \
+            -G wheel,audio,video,input,render,seat,bluetooth,storage,network,lp \
+            live 2>/dev/null || \
+        chroot_run useradd -m -u 1000 -s /bin/bash live 2>/dev/null || true
+    fi
+
+    # Passwordless root + live for the live session (login/getty need this)
+    chroot_run passwd -d root 2>/dev/null || true
+    chroot_run passwd -d live 2>/dev/null || true
+
+    ok "users ready"
+}
+
 create_etc() {
     step "writing base configuration..."
 
@@ -270,52 +489,144 @@ HOME_URL=https://github.com/mycel-linux/mycel-os
 SUPPORT_URL=https://github.com/mycel-linux/mycel-os/issues
 EOF
 
-    cat > "$ROOT/etc/passwd" <<'EOF'
-root:x:0:0:root:/root:/bin/sh
-live:x:1000:1000:Live User:/home/live:/bin/sh
-nobody:x:65534:65534:nobody:/:/sbin/nologin
+    # /etc/shells — required by chsh, useradd and login
+    cat > "$ROOT/etc/shells" <<'EOF'
+/bin/sh
+/bin/bash
+/usr/bin/bash
 EOF
 
-    cat > "$ROOT/etc/group" <<'EOF'
-root:x:0:root
-wheel:x:10:live
-audio:x:18:live
-video:x:28:live
-input:x:97:live
-seat:x:99:live
-bluetooth:x:85:live
-live:x:1000:
+    # Minimal fstab — the live system runs from squashfs; the installer writes
+    # the real fstab. tmpfs entries keep /tmp and /dev/shm sane.
+    cat > "$ROOT/etc/fstab" <<'EOF'
+tmpfs /tmp     tmpfs nosuid,nodev,mode=1777 0 0
+tmpfs /dev/shm tmpfs nosuid,nodev,mode=1777 0 0
 EOF
-
-    printf 'root:!:0:0:99999:7:::\nlive::0:0:99999:7:::\n' \
-        > "$ROOT/etc/shadow"
-    chmod 640 "$ROOT/etc/shadow"
 
     printf '127.0.0.1\tlocalhost\n127.0.1.1\tmycelos\n::1\tlocalhost\n' \
         > "$ROOT/etc/hosts"
-
     printf 'mycelos\n' > "$ROOT/etc/hostname"
+
+    # nsswitch.conf — without it, getpwnam/getgrnam lookups misbehave
+    cat > "$ROOT/etc/nsswitch.conf" <<'EOF'
+passwd: files
+group: files
+shadow: files
+hosts: files dns
+networks: files
+protocols: files
+services: files
+ethers: files
+rpc: files
+EOF
+
+    # PAM stack for login. Self-contained (no fragile include chain). The key
+    # line is `session ... pam_elogind.so`, which registers a logind session
+    # and exports XDG_RUNTIME_DIR — required for Plasma/GNOME under elogind.
+    mkdir -p "$ROOT/etc/pam.d"
+    cat > "$ROOT/etc/pam.d/login" <<'EOF'
+#%PAM-1.0
+auth      sufficient pam_unix.so   nullok
+auth      required   pam_deny.so
+account   required   pam_unix.so
+session   required   pam_unix.so
+session   optional   pam_loginuid.so
+session   optional   pam_elogind.so
+EOF
+    # A sane fallback for any other PAM-using service
+    cat > "$ROOT/etc/pam.d/other" <<'EOF'
+#%PAM-1.0
+auth      required pam_unix.so
+account   required pam_unix.so
+session   required pam_unix.so
+password  required pam_unix.so
+EOF
+
+    # Desktop session launcher. Sourced by every login shell via /etc/profile;
+    # on tty1 it reads [desktop] environment from mycel.toml and execs the right
+    # session. pam_elogind has already set XDG_RUNTIME_DIR by this point.
+    cat > "$ROOT/etc/profile.d/zz-mycel-session.sh" <<'EOF'
+# Start the graphical session automatically on tty1 (autologin)
+if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    [ -z "${XDG_RUNTIME_DIR:-}" ] && export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    [ -d "$XDG_RUNTIME_DIR" ] || { mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"; }
+    export XDG_SESSION_TYPE=wayland
+    _de=$(awk -F'"' '/^\[desktop\]/{f=1} f&&/^environment/{print $2;exit}' /etc/mycel.toml 2>/dev/null)
+    case "${_de:-plasma}" in
+        plasma)   export XDG_CURRENT_DESKTOP=KDE;          exec dbus-run-session startplasma-wayland ;;
+        gnome)    export XDG_CURRENT_DESKTOP=GNOME;        exec dbus-run-session gnome-session ;;
+        budgie)   export XDG_CURRENT_DESKTOP=Budgie:GNOME; exec dbus-run-session budgie-session ;;
+        hyprland) export XDG_CURRENT_DESKTOP=Hyprland;     exec dbus-run-session Hyprland ;;
+        sway|fessus) export XDG_CURRENT_DESKTOP=sway;      exec dbus-run-session sway ;;
+        cinnamon) unset XDG_SESSION_TYPE; exec startx /usr/bin/cinnamon-session ;;
+        xfce)     unset XDG_SESSION_TYPE; exec startx /usr/bin/startxfce4 ;;
+        mate)     unset XDG_SESSION_TYPE; exec startx /usr/bin/mate-session ;;
+        none)     : ;;   # stay at the shell
+        *)        export XDG_CURRENT_DESKTOP=KDE;          exec dbus-run-session startplasma-wayland ;;
+    esac
+fi
+EOF
 
     ok "config files written"
 }
 
 # ─── Helper: run a command inside the rootfs chroot ──────────────────────────
 
+chroot_unmount() {
+    umount "$ROOT/dev/pts" 2>/dev/null || true
+    umount "$ROOT/dev"     2>/dev/null || true
+    umount "$ROOT/sys"     2>/dev/null || true
+    umount "$ROOT/proc"    2>/dev/null || true
+}
+
 chroot_run() {
+    local rc=0
+
+    mkdir -p "$ROOT/proc" "$ROOT/sys" "$ROOT/dev" "$ROOT/dev/pts"
     mount -o bind /proc    "$ROOT/proc"
     mount -o bind /sys     "$ROOT/sys"
     mount -o bind /dev     "$ROOT/dev"
     mount -o bind /dev/pts "$ROOT/dev/pts"
 
-    chroot "$ROOT" "$@"
-    local rc=$?
+    # Ensure mounts are always cleaned up even if chroot fails under set -e
+    trap chroot_unmount RETURN
 
-    umount "$ROOT/dev/pts" 2>/dev/null || true
-    umount "$ROOT/dev"     2>/dev/null || true
-    umount "$ROOT/sys"     2>/dev/null || true
-    umount "$ROOT/proc"    2>/dev/null || true
+    # Capture exit code without `local` (which would clobber $?)
+    chroot "$ROOT" "$@" && rc=0 || rc=$?
 
+    chroot_unmount
+    trap - RETURN
     return $rc
+}
+
+# ─── 7b. Post-install hooks ──────────────────────────────────────────────────
+# We extract packages directly, so the pacman install hooks that normally make
+# a desktop functional never run. Replicate the important ones in the chroot:
+# ld.so cache, GSettings schema compilation (without it GTK apps and portals
+# abort with SIGABRT), icon/font/mime/desktop caches.
+
+run_post_install_hooks() {
+    step "running post-install hooks (ldconfig, schemas, caches)..."
+
+    chroot_run ldconfig 2>/dev/null || true
+
+    [ -d "$ROOT/usr/share/glib-2.0/schemas" ] && \
+        chroot_run glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
+
+    [ -d "$ROOT/usr/share/applications" ] && \
+        chroot_run update-desktop-database /usr/share/applications 2>/dev/null || true
+
+    [ -d "$ROOT/usr/share/mime" ] && \
+        chroot_run update-mime-database /usr/share/mime 2>/dev/null || true
+
+    for theme in hicolor breeze breeze-dark Papirus Papirus-Dark Adwaita; do
+        [ -d "$ROOT/usr/share/icons/$theme" ] && \
+            chroot_run gtk-update-icon-cache -qtf "/usr/share/icons/$theme" 2>/dev/null || true
+    done
+
+    chroot_run fc-cache -f 2>/dev/null || true
+
+    ok "post-install hooks done"
 }
 
 # ─── 8. s6 init tree ─────────────────────────────────────────────────────────
@@ -331,25 +642,39 @@ install_s6_tree() {
     chroot_run s6-rc-compile /etc/s6-rc/compiled /etc/s6-rc/source \
         || die "s6-rc-compile failed — is s6-rc installed in the rootfs?"
 
-    # Set up s6-linux-init as PID 1
-    # s6-linux-init-maker generates the init tree at /etc/s6-linux-init
+    # Set up s6-linux-init as PID 1. Flags per the s6-linux-init-maker docs:
+    #   -1                 send stage-1 messages to /dev/console (visible logs)
+    #   -B                 run without a catch-all logger (we have no log user)
+    #   -p <path>          initial PATH for PID 1
+    #   -c <basedir>       where the config lives at boot time
+    #   final positional   directory to generate the config into now
+    # The generated init runs /etc/s6-linux-init/scripts/rc.init as stage 2,
+    # with s6-svscan already supervising the scandir at /run/service.
     chroot_run s6-linux-init-maker \
+        -1 -B \
+        -p /usr/bin:/usr/sbin:/bin:/sbin \
         -c /etc/s6-linux-init \
-        -s /run/s6-linux-init \
-        -b /usr/bin \
-        -u nobody \
-        -L \
         /etc/s6-linux-init \
         || die "s6-linux-init-maker failed"
 
-    # Install our stage 2 / shutdown scripts over the defaults
+    # Install our stage 2 / shutdown scripts over the generated defaults
     install -Dm755 "$SCRIPT_DIR/../mycel-core/s6-linux-init/scripts/rc.init" \
         "$ROOT/etc/s6-linux-init/scripts/rc.init"
     install -Dm755 "$SCRIPT_DIR/../mycel-core/s6-linux-init/scripts/rc.shutdown" \
         "$ROOT/etc/s6-linux-init/scripts/rc.shutdown"
 
-    # /sbin/init → the generated s6-linux-init binary
-    ln -sf /etc/s6-linux-init/init "$ROOT/sbin/init"
+    # /sbin/init → s6-linux-init's init. MUST be a RELATIVE symlink: dracut
+    # validates init with `[ -x /sysroot/sbin/init ]` before switch_root, and an
+    # absolute symlink target resolves against the initramfs root (where it does
+    # not exist) → "Cannot find init". /sbin and /usr/sbin are usr-merged to
+    # /usr/bin, so we write the link there. From /usr/bin, /etc is ../../etc.
+    ln -sfn ../../etc/s6-linux-init/bin/init "$ROOT/usr/bin/init"
+
+    # Expose halt / poweroff / reboot / shutdown in PATH (relative links too).
+    for cmd in halt poweroff reboot shutdown telinit; do
+        [ -e "$ROOT/etc/s6-linux-init/bin/$cmd" ] && \
+            ln -sfn "../../etc/s6-linux-init/bin/$cmd" "$ROOT/usr/bin/$cmd"
+    done
 
     ok "s6 init tree ready"
 }
@@ -368,69 +693,27 @@ seed_package_db() {
     local now
     now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Walk the Arch package DB desc files we downloaded during build
-    find "$PKG_CACHE/arch-db" -name "desc" | while read -r desc; do
-        local name version
-        name=$(awk '/^%NAME%/{getline; print; exit}' "$desc")
-        version=$(awk '/^%VERSION%/{getline; print; exit}' "$desc")
+    # Seed a record for every Arch package whose files actually landed in the
+    # rootfs. We read the cached .pkg.tar.zst files (one per installed package)
+    # rather than the full repo DB, so we only record what we really installed.
+    local pkgfile pkgname pkgver
+    for pkgfile in "$PKG_CACHE"/*.pkg.tar.zst; do
+        [ -e "$pkgfile" ] || continue
 
-        [ -z "$name" ] || [ -z "$version" ] && continue
+        # .PKGINFO holds pkgname and pkgver — read it straight from the archive
+        local pkginfo
+        pkginfo=$(tar -I zstd -xOf "$pkgfile" .PKGINFO 2>/dev/null || true)
+        [ -n "$pkginfo" ] || continue
 
-        # Only seed packages that are actually present in the rootfs
-        [ -f "$ROOT/usr/bin/$name" ] || \
-        [ -f "$ROOT/usr/sbin/$name" ] || \
-        [ -f "$ROOT/usr/lib/$name" ] || \
-        [ -d "$ROOT/usr/share/$name" ] || \
-        [ -f "$ROOT/usr/bin/${name}d" ] || \
-        grep -qx "$name" "$PKG_CACHE/installed.list" 2>/dev/null \
-            || continue
+        pkgname=$(printf '%s\n' "$pkginfo" | awk -F' = ' '/^pkgname/{print $2; exit}')
+        pkgver=$(printf  '%s\n' "$pkginfo" | awk -F' = ' '/^pkgver/{print $2; exit}')
 
-        cat > "$db/${name}.toml" <<TOML
-name         = "${name}"
-version      = "${version}"
-installed_at = "${now}"
+        [ -n "$pkgname" ] || continue
+        [ -n "$pkgver" ]  || pkgver="0.0.0"
 
-[files]
-installed = []
-TOML
-    done
-
-    # Also seed from an explicit list of packages we know we installed
-    local installed=(
-        bash coreutils grep sed gawk findutils util-linux procps-ng
-        iproute2 iputils tar gzip bzip2 xz zstd file less which
-        glibc eudev dbus seatd shadow pam
-        skalibs execline s6 s6-rc s6-linux-init
-        linux-lts linux-firmware
-        nano curl git wget
-        bluez bluez-utils
-        pipewire pipewire-audio wireplumber
-        networkmanager
-        sway swaybg swaylock wlroots waybar dunst wofi kitty
-        wl-clipboard grim slurp cliphist wf-recorder
-        xdg-desktop-portal xdg-utils
-        firefox thunar mousepad mpv imv
-        zathura xarchiver blueman qalculate-gtk
-        inter-font papirus-icon-theme
-        calamares
-    )
-
-    for pkg in "${installed[@]}"; do
-        local record="$db/${pkg}.toml"
-        [ -f "$record" ] && continue   # already seeded from arch-db
-
-        # Try to find the version in the arch-db
-        local version="0.0.0"
-        local desc_file
-        desc_file=$(find "$PKG_CACHE/arch-db" -name "desc" 2>/dev/null \
-            | xargs grep -l "^${pkg}$" 2>/dev/null | head -1)
-        if [ -n "$desc_file" ]; then
-            version=$(awk '/^%VERSION%/{getline; print; exit}' "$desc_file")
-        fi
-
-        cat > "$record" <<TOML
-name         = "${pkg}"
-version      = "${version:-0.0.0}"
+        cat > "$db/${pkgname}.toml" <<TOML
+name         = "${pkgname}"
+version      = "${pkgver}"
 installed_at = "${now}"
 
 [files]
@@ -538,6 +821,7 @@ install_assets_and_user() {
         /^\[/ && !/^\[(desktop|services)\]/ { skip=0 }
         !skip { print }
     ' "$mycel_toml" > "$mycel_toml.tmp"
+    printf '\n' >> "$mycel_toml.tmp"
     profile_desktop_section >> "$mycel_toml.tmp"
     mv "$mycel_toml.tmp" "$mycel_toml"
 
@@ -591,9 +875,12 @@ main() {
 
     check_deps
     create_skeleton
-    create_etc
     install_system_packages
-    install_myc_packages
+    # users + base config AFTER packages, so the filesystem package's /etc
+    # files don't clobber ours and sysusers can see every package's declarations
+    create_users
+    create_etc
+    run_post_install_hooks
     install_s6_tree
     install_skel
     seed_package_db

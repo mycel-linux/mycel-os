@@ -15,8 +15,9 @@ pub fn run() -> Result<()> {
     }
 
     let current = limine::current_generation();
-    let keep = parser::load()
-        .ok()
+    let config = parser::load().ok();
+    let keep = config
+        .as_ref()
         .and_then(|c| c.system.keep_generations)
         .unwrap_or(5);
 
@@ -64,7 +65,11 @@ pub fn run() -> Result<()> {
 
     // Rewrite the boot menu without the deleted generations
     if let Ok(root_dev) = btrfs::root_device() {
-        limine::write(current, &root_dev, keep).ok();
+        let boot_cfg = match &config {
+            Some(c) => limine::BootConfig { timeout: c.boot.timeout, extra_cmdline: &c.boot.cmdline },
+            None    => limine::BootConfig::default_if_missing(),
+        };
+        limine::write(current, &root_dev, keep, &boot_cfg).ok();
     }
 
     println!("{} purge complete", "ok".green().bold());

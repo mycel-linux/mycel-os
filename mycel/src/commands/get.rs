@@ -68,7 +68,11 @@ pub fn run(packages: &[String]) -> Result<()> {
 
         if btrfs::is_btrfs_root() {
             if let Ok(root_dev) = btrfs::root_device() {
-                limine::write(gen, &root_dev, keep).ok();
+                let boot_cfg = limine::BootConfig {
+                    timeout:       config.boot.timeout,
+                    extra_cmdline: &config.boot.cmdline,
+                };
+                limine::write(gen, &root_dev, keep, &boot_cfg).ok();
             }
         }
     }

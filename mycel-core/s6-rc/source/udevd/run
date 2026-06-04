@@ -1,2 +1,4 @@
 #!/bin/sh
-exec udevd --daemon=0 --resolve-names=never
+# eudev is not in the Arch repos; we use systemd-udevd standalone. It runs fine
+# without systemd as PID 1, exactly as non-systemd distros do.
+exec /usr/lib/systemd/systemd-udevd

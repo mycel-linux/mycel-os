@@ -1,7 +1,0 @@
-#!/bin/sh
-dbus-send --system \
-    --dest=org.freedesktop.DBus \
-    --print-reply \
-    /org/freedesktop/DBus \
-    org.freedesktop.DBus.ListNames \
-    >/dev/null 2>&1

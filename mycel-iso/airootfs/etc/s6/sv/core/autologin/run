@@ -1,2 +1,0 @@
-#!/bin/sh
-exec s6-setuidgid live env HOME=/home/live USER=live sway

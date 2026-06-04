@@ -11,7 +11,7 @@ ROOTFS_DIR="$BUILD_DIR/rootfs"
 SFS_DIR="$BUILD_DIR/sfs"
 
 # ─── Profile selection ─────────────────────────────────────────────────────────
-PROFILE="fessus"
+PROFILE="plasma"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --profile) PROFILE="$2"; shift 2 ;;
@@ -68,18 +68,33 @@ build_boot() {
     step "copying kernel and building initrd..."
     mkdir -p "$ISO_DIR/boot"
 
-    local kernel_path
-    kernel_path=$(find "$ROOTFS_DIR/boot" -name "vmlinuz*" 2>/dev/null | head -1)
-    [ -n "$kernel_path" ] || die "no kernel in rootfs/boot — was linux-lts installed?"
-    cp "$kernel_path" "$ISO_DIR/boot/vmlinuz"
-
+    # Determine the kernel version from the installed modules directory.
     local kver
     kver=$(ls "$ROOTFS_DIR/usr/lib/modules/" 2>/dev/null | sort -V | tail -1)
-    [ -n "$kver" ] || die "no kernel modules in rootfs/usr/lib/modules"
+    [ -n "$kver" ] || die "no kernel modules in rootfs/usr/lib/modules — was linux-lts installed?"
 
+    # Modern Arch kernels ship vmlinuz inside the modules dir; the /boot copy is
+    # normally made by a pacman hook that never runs in our extraction-based build.
+    local kernel_path="$ROOTFS_DIR/usr/lib/modules/$kver/vmlinuz"
+    [ -f "$kernel_path" ] || kernel_path=$(find "$ROOTFS_DIR/boot" -name 'vmlinuz*' 2>/dev/null | head -1)
+    [ -n "$kernel_path" ] && [ -f "$kernel_path" ] || die "no kernel image found for $kver"
+    cp "$kernel_path" "$ISO_DIR/boot/vmlinuz"
+
+    # Generate modules.dep etc. — normally done by a pacman hook that doesn't
+    # run in our extraction-based build, so dracut would fail without it.
+    step "running depmod for $kver..."
+    depmod -b "$ROOTFS_DIR" "$kver" || die "depmod failed for $kver"
+
+    # Explicitly bundle the drivers a live ISO needs: the CD/disk controllers
+    # to reach the medium, iso9660 to read it, loop+squashfs for the image, and
+    # overlay/dm for the writable root. --no-hostonly alone has proven not to
+    # pull all of these reliably for an offline-built generic initramfs.
     dracut --force \
         --no-hostonly \
         --add "dmsquash-live" \
+        --add-drivers "squashfs loop overlay dm_snapshot dm_mod iso9660 \
+                       sr_mod cdrom sd_mod ahci ata_piix \
+                       virtio_blk virtio_scsi virtio_pci" \
         --omit "multipath iscsi fcoe nfs" \
         --kver "$kver" \
         --kmoddir "$ROOTFS_DIR/usr/lib/modules/$kver" \
@@ -92,8 +107,13 @@ build_boot() {
 setup_iso_dir() {
     step "setting up ISO directory structure..."
     mkdir -p "$ISO_DIR"/{boot,EFI/BOOT,MycelOS}
-    cp "$SFS_DIR/airootfs.sfs"              "$ISO_DIR/MycelOS/"
-    cp "$SCRIPT_DIR/limine/limine.conf"     "$ISO_DIR/boot/"
+    cp "$SFS_DIR/airootfs.sfs" "$ISO_DIR/MycelOS/"
+
+    # Generate limine.conf with the profile's CDLABEL substituted in so the
+    # initramfs can find the squashfs by volume label.
+    sed "s/@CDLABEL@/${ISO_LABEL}/g" \
+        "$SCRIPT_DIR/limine/limine.conf" > "$ISO_DIR/boot/limine.conf"
+
     cp /usr/share/limine/limine-bios.sys    "$ISO_DIR/boot/"
     cp /usr/share/limine/limine-bios-cd.bin "$ISO_DIR/boot/"
     cp /usr/share/limine/limine-uefi-cd.bin "$ISO_DIR/boot/"
@@ -104,15 +124,19 @@ setup_iso_dir() {
 # ─── Build ISO ────────────────────────────────────────────────────────────────
 build_iso() {
     step "building ISO with xorriso..."
+    # Modern limine (v4+) hybrid ISO: use --protective-msdos-label, NOT
+    # -isohybrid-mbr. The latter conflicts with -efi-boot-part and produces
+    # "Overlapping MBR partition entries". limine bios-install embeds the BIOS
+    # stage into the finished ISO afterward.
     xorriso -as mkisofs \
+        -R -r -J \
         -iso-level 3 \
         -volid "$ISO_LABEL" \
-        -full-iso9660-filenames \
         -b boot/limine-bios-cd.bin \
         -no-emul-boot -boot-load-size 4 -boot-info-table \
         --efi-boot boot/limine-uefi-cd.bin \
         -efi-boot-part --efi-boot-image \
-        -isohybrid-mbr /usr/share/limine/limine-bios.sys \
+        --protective-msdos-label \
         -output "$OUTPUT_ISO" \
         "$ISO_DIR"
     limine bios-install "$OUTPUT_ISO"
@@ -127,8 +151,24 @@ main() {
     echo ""
 
     check_deps
-    build_rootfs
-    create_squashfs
+
+    # Fast-iteration flags:
+    #   MYCEL_SKIP_BOOTSTRAP=1  reuse the existing rootfs (skip package install)
+    #   MYCEL_SKIP_SQUASHFS=1   reuse the existing squashfs (skip recompression)
+    # Use SKIP_BOOTSTRAP alone after editing files in the rootfs — the squashfs
+    # is rebuilt so the changes make it into the image.
+    if [ "${MYCEL_SKIP_BOOTSTRAP:-0}" = "1" ] && [ -d "$ROOTFS_DIR" ]; then
+        step "MYCEL_SKIP_BOOTSTRAP=1 — reusing existing rootfs"
+    else
+        build_rootfs
+    fi
+
+    if [ "${MYCEL_SKIP_SQUASHFS:-0}" = "1" ] && [ -f "$SFS_DIR/airootfs.sfs" ]; then
+        step "MYCEL_SKIP_SQUASHFS=1 — reusing existing squashfs"
+    else
+        create_squashfs
+    fi
+
     build_boot
     setup_iso_dir
     build_iso

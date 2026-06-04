@@ -1,2 +1,0 @@
-#!/bin/sh
-udevadm settle 2>/dev/null || true
