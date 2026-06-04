@@ -1,7 +1,8 @@
 <div align="center">
   <img src="mycel-core/assets/logo_black.png" width="120" />
   <h1>MycelOS</h1>
-  <p>Independent. Declarative. s6.</p>
+  <p><strong>The First Rhizomatic OS</strong></p>
+  <p>Declarative · Immutable · Independent · s6</p>
 
   ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
   ![Status](https://img.shields.io/badge/status-boots%20to%20plasma-brightgreen)
@@ -14,6 +15,17 @@
 MycelOS is an independent Linux distribution built from scratch. Not a fork. Not based on anything. It runs on **s6** — a modern, actively maintained process supervision suite — driven by a single declarative file (`mycel.toml`), and boots to a full **KDE Plasma** desktop.
 
 No systemd. No runit. No OpenRC. The C runtime is glibc, the init is s6-linux-init as PID 1, services are dependency-ordered by s6-rc, and logind is provided by elogind — a complete, modern, systemd-free desktop stack.
+
+## Rhizomatic
+
+A rhizome is the underground network a mycelium grows from — no center, no trunk, no hierarchy; every node connects directly to every other. MycelOS is built the same way, and "rhizomatic" isn't decoration — it's the architecture:
+
+- **Decentralized packages** — software comes from a web of GitHub overlays (`github:anyone/their-packages`), not one blessed central repository.
+- **Declarative** — you describe the whole organism in `mycel.toml` and it grows into that shape, instead of issuing an imperative chain of commands.
+- **A graph, not a hierarchy** — s6-rc resolves services as a network of dependencies; there's no central daemon that owns the system.
+- **Immutable & branching** — every `mycel switch` is a new generation; old ones are sealed read-only and you can roll back to any of them. Prune a branch, the network survives.
+
+NixOS is declarative but centralized — one package tree, one builder. No one has claimed *rhizomatic* as an identity. MycelOS does.
 
 ## Why s6?
 
