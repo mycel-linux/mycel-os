@@ -1,0 +1,13 @@
+[package]
+name = "mycel-compose"
+version = "0.1.0"
+edition = "2021"
+description = "MycelOS declarative service composer — one declaration per service, generates all the s6-rc / dbus / polkit glue"
+license = "GPL-3.0"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+colored = "2"
