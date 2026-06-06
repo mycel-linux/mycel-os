@@ -1,0 +1,6 @@
+name = "udev-trigger"
+kind = "oneshot"
+needs = ["udevd"]
+bundles = ["core"]
+
+up = '/bin/sh -c "udevadm trigger --type=subsystems --action=add; udevadm trigger --type=devices --action=add; udevadm settle --timeout=30"'

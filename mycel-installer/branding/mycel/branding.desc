@@ -18,7 +18,7 @@ strings:
 images:
   productLogo:    logo_black.png
   productIcon:    logo_black.png
-  productWelcome: welcome.png
+  productWelcome: logo_black.png
 
 slideshow:    show.qml
 slideshowAPI: 2

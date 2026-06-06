@@ -15,6 +15,8 @@ PKG_CACHE="$SCRIPT_DIR/build/pkg-cache"
 RECIPES="$SCRIPT_DIR/../community/recipes"
 MYCEL_PKG="$SCRIPT_DIR/../mycel-pkg/target/release/mycel-pkg"
 FESSUS_INIT="$SCRIPT_DIR/../fessus/fessus-init/target/release/fessus-init"
+MYCEL_COMPOSE="$SCRIPT_DIR/../mycel-compose/target/release/mycel-compose"
+SERVICES="$SCRIPT_DIR/../mycel-core/services"
 
 # ─── Profile selection ────────────────────────────────────────────────────────
 
@@ -55,6 +57,7 @@ check_deps() {
     done
     [ -x "$MYCEL_PKG" ]   || die "mycel-pkg not built — run: cd mycel-pkg && cargo build --release"
     [ -x "$FESSUS_INIT" ] || die "fessus-init not built — run: cd fessus/fessus-init && cargo build --release"
+    [ -x "$MYCEL_COMPOSE" ] || die "mycel-compose not built — run: cd mycel-compose && cargo build --release"
     ok "dependencies ok"
 }
 
@@ -218,43 +221,52 @@ fetch_arch_pkg() {
     _extract_pkg "$real" "$repofile"
 }
 
-# Fetch a single package from the Artix `system` repo and extract it. Used for
-# packages Arch doesn't ship (elogind). Dependencies are NOT resolved here —
-# callers must ensure deps (pam, dbus, libcap, etc.) are already installed from
-# the Arch set, which they are. Kept separate so Artix packages never leak into
-# the Arch dependency index and cause cross-repo provider confusion.
+# Fetch a single package from the Artix repos (system/world/galaxy) and extract
+# it. Used for packages Arch doesn't ship (elogind, calamares). Dependencies are
+# NOT resolved here — callers ensure deps come from the Arch set. Kept separate
+# so Artix packages never leak into the Arch dependency index.
 ARTIX_DB_READY=0
-fetch_artix_pkg() {
-    local pkgname="$1"
-    local db="$PKG_CACHE/artix-system-db"
-
-    if [ "$ARTIX_DB_READY" = "0" ]; then
+setup_artix_db() {
+    [ "$ARTIX_DB_READY" = "1" ] && return
+    local repo
+    for repo in system world galaxy; do
+        local db="$PKG_CACHE/artix-db/$repo"
         if [ ! -d "$db" ]; then
-            info "downloading Artix system database..."
+            info "downloading Artix $repo database..."
             mkdir -p "$db"
             curl -sL --max-time 120 --connect-timeout 15 \
-                "$ARTIX_MIRROR/system/os/x86_64/system.db" \
-                -o "$PKG_CACHE/artix-system.db" \
-                || die "could not download Artix system.db"
-            tar -xzf "$PKG_CACHE/artix-system.db" -C "$db" 2>/dev/null || true
+                "$ARTIX_MIRROR/$repo/os/x86_64/$repo.db" \
+                -o "$PKG_CACHE/artix-$repo.db" \
+                || die "could not download Artix $repo.db"
+            tar -xzf "$PKG_CACHE/artix-$repo.db" -C "$db" 2>/dev/null || true
         fi
-        ARTIX_DB_READY=1
-    fi
+    done
+    ARTIX_DB_READY=1
+}
 
-    local fn
-    fn=$(find "$db" -name desc -print0 2>/dev/null | xargs -0 awk -v want="$pkgname" '
-        FNR==1 { name=""; f="" }
-        /^%FILENAME%$/ { getline; f=$0 }
-        /^%NAME%$/     { getline; name=$0 }
-        name==want && f!="" { print f; exit }
-    ' 2>/dev/null | head -1)
-    [ -n "$fn" ] || die "$pkgname not found in Artix system repo"
+fetch_artix_pkg() {
+    local pkgname="$1"
+    setup_artix_db
 
+    # Search every Artix repo; print "repo/filename" of the matching %NAME%
+    local result
+    result=$(for repo in system world galaxy; do
+        find "$PKG_CACHE/artix-db/$repo" -name desc -print0 2>/dev/null \
+            | xargs -0 awk -v want="$pkgname" -v repo="$repo" '
+                FNR==1 { name=""; f="" }
+                /^%FILENAME%$/ { getline; f=$0 }
+                /^%NAME%$/     { getline; name=$0 }
+                name==want && f!="" { print repo "/" f; exit }
+            ' 2>/dev/null
+    done | head -1)
+    [ -n "$result" ] || die "$pkgname not found in any Artix repo"
+
+    local repo="${result%%/*}" fn="${result#*/}"
     local cached="$PKG_CACHE/$fn"
     if [ ! -f "$cached" ]; then
-        info "fetching $pkgname from Artix..."
+        info "fetching $pkgname from Artix ($repo)..."
         curl -sL --max-time 180 --connect-timeout 15 \
-            "$ARTIX_MIRROR/system/os/x86_64/$fn" -o "$cached" \
+            "$ARTIX_MIRROR/$repo/os/x86_64/$fn" -o "$cached" \
             || die "could not download $pkgname from Artix"
     fi
 
@@ -262,7 +274,7 @@ fetch_artix_pkg() {
         --exclude='.PKGINFO' --exclude='.MTREE' \
         --exclude='.BUILDINFO' --exclude='.INSTALL' \
         2>/dev/null || true
-    ok "$pkgname (from Artix)"
+    ok "$pkgname (from Artix $repo)"
 }
 
 # ─── 4b. s6 init system (built from skarnet source) ──────────────────────────
@@ -386,8 +398,9 @@ install_system_packages() {
     # trying to spawn duplicates ("elogind is already running as PID ...").
     rm -f "$ROOT/usr/share/dbus-1/system-services/org.freedesktop.login1.service"
 
-    # Basic userland tools
-    for pkg in nano curl git wget; do
+    # Basic userland tools. rsync is required by Calamares unpackfs to copy the
+    # system to disk (without it the install dies with "rsync ... code 127").
+    for pkg in nano curl git wget sudo polkit rsync; do
         fetch_arch_pkg "$pkg"
     done
 
@@ -423,10 +436,17 @@ install_system_packages() {
         done
     fi
 
-    # Installer (always present — users click it from the live desktop)
-    for pkg in calamares; do
+    # Installer. Calamares isn't in Arch (AUR only); Artix packages a
+    # non-systemd build. Most of its heavy deps (qt6, KDE frameworks) are
+    # already present from the desktop; fetch the installer-specific ones from
+    # Arch, then calamares itself from Artix.
+    for pkg in kpmcore parted hwinfo ckbcomp libpwquality yaml-cpp \
+                polkit-qt6 qt6-location squashfs-tools \
+                python python-jsonschema python-yaml \
+                limine dracut efibootmgr dosfstools; do
         fetch_arch_pkg "$pkg"
     done
+    fetch_artix_pkg calamares
 
     ok "system packages installed"
 }
@@ -520,6 +540,28 @@ ethers: files
 rpc: files
 EOF
 
+    # sudo for the wheel group, passwordless on the live system so the
+    # installer (and the live user) can elevate without a password prompt.
+    mkdir -p "$ROOT/etc/sudoers.d"
+    echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' > "$ROOT/etc/sudoers.d/10-wheel"
+    chmod 0440 "$ROOT/etc/sudoers.d/10-wheel"
+
+    # polkit: let the wheel group run Calamares without authentication, so the
+    # installer launches straight from the live Plasma menu.
+    mkdir -p "$ROOT/etc/polkit-1/rules.d"
+    cat > "$ROOT/etc/polkit-1/rules.d/49-mycel-live.rules" <<'EOF'
+// Live-session convenience: wheel runs the installer + admin actions freely.
+polkit.addRule(function(action, subject) {
+    if (subject.isInGroup("wheel")) {
+        if (action.id.indexOf("com.github.calamares") === 0 ||
+            action.id.indexOf("org.freedesktop.udisks2") === 0 ||
+            action.id.indexOf("org.freedesktop.login1") === 0) {
+            return polkit.Result.YES;
+        }
+    }
+});
+EOF
+
     # PAM stack for login. Self-contained (no fragile include chain). The key
     # line is `session ... pam_elogind.so`, which registers a logind session
     # and exports XDG_RUNTIME_DIR — required for Plasma/GNOME under elogind.
@@ -608,6 +650,13 @@ chroot_run() {
 run_post_install_hooks() {
     step "running post-install hooks (ldconfig, schemas, caches)..."
 
+    # Hide iconless/clutter launchers pulled in as dependencies that don't
+    # belong in MycelOS (we manage software with mycel-pkg, not a GUI store).
+    for d in avahi-discover bssh bvnc qv4l2 qvidcap; do
+        f="$ROOT/usr/share/applications/${d}.desktop"
+        [ -f "$f" ] && echo "NoDisplay=true" >> "$f"
+    done
+
     chroot_run ldconfig 2>/dev/null || true
 
     [ -d "$ROOT/usr/share/glib-2.0/schemas" ] && \
@@ -634,9 +683,14 @@ run_post_install_hooks() {
 install_s6_tree() {
     step "installing s6 init tree..."
 
-    # Copy s6-rc service source definitions
+    # Weave the s6-rc service source tree from declarative definitions.
+    # mycel-compose reads one .toml per service from mycel-core/services and
+    # emits the full s6-rc source tree (run scripts, type, dependencies,
+    # bundle contents) — the declarative service layer that makes stitching
+    # services together a matter of editing a .toml, not hand-rolling glue.
     mkdir -p "$ROOT/etc/s6-rc"
-    cp -aT "$SCRIPT_DIR/../mycel-core/s6-rc/source" "$ROOT/etc/s6-rc/source"
+    "$MYCEL_COMPOSE" --services "$SERVICES" --out "$ROOT/etc/s6-rc/source" \
+        || die "mycel-compose failed to generate the s6-rc source tree"
 
     # Compile the s6-rc database inside the rootfs (needs the s6-rc binary)
     chroot_run s6-rc-compile /etc/s6-rc/compiled /etc/s6-rc/source \
@@ -789,8 +843,15 @@ install_mycel_tools() {
     install -Dm755 "$SCRIPT_DIR/../mycel/target/release/mycel"       "$ROOT/usr/bin/mycel"
     install -Dm755 "$MYCEL_PKG"                                        "$ROOT/usr/bin/mycel-pkg"
     install -Dm755 "$FESSUS_INIT"                                      "$ROOT/usr/bin/fessus-init"
+    install -Dm755 "$MYCEL_COMPOSE"                                    "$ROOT/usr/bin/mycel-compose"
 
-    ok "mycel, mycel-pkg, fessus-init installed"
+    # Install the service declarations so the running system can recompose its
+    # s6-rc database (mycel switch → mycel-compose → s6-rc-update). These are the
+    # source of truth; editing one and running `mycel switch` applies it live.
+    mkdir -p "$ROOT/etc/mycel/services"
+    cp -a "$SERVICES"/*.toml "$ROOT/etc/mycel/services/"
+
+    ok "mycel, mycel-pkg, fessus-init, mycel-compose installed"
 }
 
 # ─── 13. Assets, configs, live user ──────────────────────────────────────────

@@ -1,0 +1,4 @@
+name = "default"
+kind = "bundle"
+# Members (core, NetworkManager, bluetooth, cronie, getty-tty2) declare
+# `bundles = ["default"]` themselves; the composer folds them in.

@@ -1,6 +1,10 @@
-#!/bin/sh
+name = "dbus"
+kind = "longrun"
+needs = ["udevd"]
+bundles = ["core"]
+
 # s6-rc guarantees this starts before its dependents (pipewire, NetworkManager,
 # bluetooth). dbus-daemon creates its socket within milliseconds and dependents
 # retry their connection, so plain start-ordering is sufficient here.
-mkdir -p /run/dbus
-exec dbus-daemon --system --nofork --nopidfile
+setup = ["mkdir -p /run/dbus"]
+exec = "dbus-daemon --system --nofork --nopidfile"

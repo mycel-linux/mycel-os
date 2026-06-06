@@ -1,8 +1,0 @@
-udevd
-udev-trigger
-dbus
-elogind
-seatd
-pipewire
-wireplumber
-autologin

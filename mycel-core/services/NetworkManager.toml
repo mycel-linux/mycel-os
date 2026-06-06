@@ -1,0 +1,10 @@
+name = "NetworkManager"
+kind = "longrun"
+needs = ["dbus", "udevd"]
+bundles = ["default"]
+
+exec = "NetworkManager --no-daemon"
+
+# Owns this system bus name → composer can emit a dbus policy (phase 2).
+dbus_name = "org.freedesktop.NetworkManager"
+polkit_allow = "org.freedesktop.NetworkManager"

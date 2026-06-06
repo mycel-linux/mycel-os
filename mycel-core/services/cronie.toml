@@ -1,0 +1,5 @@
+name = "cronie"
+kind = "longrun"
+bundles = ["default"]
+
+exec = "crond -n"

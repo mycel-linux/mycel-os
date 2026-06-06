@@ -1,3 +1,10 @@
+name = "wireplumber"
+kind = "longrun"
+needs = ["pipewire"]
+bundles = ["core"]
+
+# Same per-user environment requirement as pipewire (raw run escape hatch).
+run = '''
 #!/bin/sh
 username=$(awk -F'"' '/^\[\[users\]\]/{f=1} f && /^name/{print $2; exit}' \
     /etc/mycel.toml 2>/dev/null)
@@ -8,3 +15,4 @@ exec s6-setuidgid "$username" \
     env HOME="/home/$username" USER="$username" \
     XDG_RUNTIME_DIR="/run/user/$uid" \
     wireplumber
+'''

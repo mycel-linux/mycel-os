@@ -10,11 +10,19 @@ LIVE_PATHS = [
 ]
 
 
-def _write_locale_gen(root, locale_conf_path):
-    """Read LANG from /etc/locale.conf and write it to /etc/locale.gen."""
+def _warn(msg):
+    try:
+        libcalamares.utils.warning("mycelos-cleanup: " + msg)
+    except Exception:
+        pass
+
+
+def _write_locale_gen(root):
+    """Mirror LANG from /etc/locale.conf into /etc/locale.gen."""
+    locale_conf = os.path.join(root, "etc", "locale.conf")
     lang = None
     try:
-        with open(locale_conf_path) as f:
+        with open(locale_conf) as f:
             for line in f:
                 line = line.strip()
                 if line.startswith("LANG="):
@@ -22,61 +30,55 @@ def _write_locale_gen(root, locale_conf_path):
                     break
     except OSError:
         return
-
     if not lang:
         return
 
-    # Strip the encoding suffix (e.g. "en_US.UTF-8" → "en_US") to build the
-    # locale.gen entry, then re-add UTF-8 in the standard format.
-    locale_gen_entry = f"{lang} UTF-8\n"
-    locale_gen_path  = os.path.join(root, "etc", "locale.gen")
-
+    entry = "{} UTF-8\n".format(lang)
+    path  = os.path.join(root, "etc", "locale.gen")
     existing = ""
     try:
-        with open(locale_gen_path) as f:
+        with open(path) as f:
             existing = f.read()
     except OSError:
         pass
+    if entry not in existing:
+        with open(path, "a") as f:
+            f.write(entry)
 
-    if locale_gen_entry not in existing:
-        with open(locale_gen_path, "a") as f:
-            f.write(locale_gen_entry)
 
-
-def run():
-    gs   = libcalamares.globalStorage
-    root = gs.value("rootMountPoint") or "/mnt"
-
-    # ── locale.gen ────────────────────────────────────────────────────────────
-    # Calamares' locale module writes /etc/locale.conf but not /etc/locale.gen.
-    # We write it here so that locale-gen on first boot actually generates the
-    # right locale instead of silently doing nothing.
-    _write_locale_gen(root, os.path.join(root, "etc", "locale.conf"))
-
-    # ── fessus.toml for installed user ────────────────────────────────────────
-    users    = gs.value("users") or []
+def _seed_user_config(root):
+    """Copy the live fessus.toml into the new user's home, fix ownership."""
+    users    = libcalamares.globalStorage.value("users") or []
     user     = users[0] if users else {}
-    username = user.get("username", "")
-    uid      = user.get("uid", 1000)
-    gid      = user.get("gid", 1000)
+    username = user.get("username", "") if isinstance(user, dict) else ""
+    if not username:
+        return
 
-    if username:
-        user_home   = os.path.join(root, "home", username)
-        user_config = os.path.join(user_home, ".config")
-        live_fessus = os.path.join(root, "home", "live", ".config", "fessus.toml")
-        dest_fessus = os.path.join(user_config, "fessus.toml")
-        os.makedirs(user_config, exist_ok=True)
-        if os.path.exists(live_fessus) and not os.path.exists(dest_fessus):
-            shutil.copy2(live_fessus, dest_fessus)
-        try:
-            os.chown(user_home,   uid, gid)
-            os.chown(user_config, uid, gid)
-            if os.path.exists(dest_fessus):
-                os.chown(dest_fessus, uid, gid)
-        except OSError:
-            pass
+    # uid/gid may come back as str, None, or be absent — coerce to int safely.
+    try:
+        uid = int(user.get("uid", 1000))
+    except (TypeError, ValueError):
+        uid = 1000
+    try:
+        gid = int(user.get("gid", 1000))
+    except (TypeError, ValueError):
+        gid = 1000
 
-    # ── remove live-only paths ────────────────────────────────────────────────
+    user_home   = os.path.join(root, "home", username)
+    user_config = os.path.join(user_home, ".config")
+    live_fessus = os.path.join(root, "home", "live", ".config", "fessus.toml")
+    dest_fessus = os.path.join(user_config, "fessus.toml")
+
+    os.makedirs(user_config, exist_ok=True)
+    if os.path.exists(live_fessus) and not os.path.exists(dest_fessus):
+        shutil.copy2(live_fessus, dest_fessus)
+
+    for p in (user_home, user_config, dest_fessus):
+        if os.path.exists(p):
+            os.chown(p, uid, gid)
+
+
+def _remove_live_paths(root):
     for rel in LIVE_PATHS:
         path = os.path.join(root, rel)
         if os.path.isdir(path) and not os.path.islink(path):
@@ -87,21 +89,26 @@ def run():
             except OSError:
                 pass
 
-    subprocess.run(["chroot", root, "userdel", "-r", "live"], check=False)
 
-    # ── machine-id ────────────────────────────────────────────────────────────
-    mid = os.path.join(root, "etc", "machine-id")
-    try:
-        with open(mid, "w") as f:
-            f.write("uninitialized\n")
-    except OSError:
-        pass
+def run():
+    """Tidy the target after unpack. Every step is best-effort: a failure here
+    must never abort a successful install, so we catch everything and warn."""
+    root = libcalamares.globalStorage.value("rootMountPoint") or "/mnt"
 
-    # ── firstboot sentinel ────────────────────────────────────────────────────
-    sentinel = os.path.join(root, "var", "lib", "mycel", "firstboot.done")
-    try:
-        os.remove(sentinel)
-    except OSError:
-        pass
+    for label, fn in (
+        ("locale.gen",     lambda: _write_locale_gen(root)),
+        ("user config",    lambda: _seed_user_config(root)),
+        ("remove live",    lambda: _remove_live_paths(root)),
+        ("userdel live",   lambda: subprocess.run(
+            ["chroot", root, "userdel", "-r", "live"], check=False)),
+        ("machine-id",     lambda: open(os.path.join(root, "etc", "machine-id"), "w")
+                                     .write("uninitialized\n")),
+        ("firstboot",      lambda: os.remove(
+            os.path.join(root, "var", "lib", "mycel", "firstboot.done"))),
+    ):
+        try:
+            fn()
+        except Exception as e:
+            _warn("{} step failed (non-fatal): {}".format(label, e))
 
     return None

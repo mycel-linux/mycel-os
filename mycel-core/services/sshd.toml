@@ -1,0 +1,6 @@
+name = "sshd"
+kind = "longrun"
+# Optional service — not in any bundle by default; enable via mycel.toml.
+
+setup = ["[ -f /etc/ssh/ssh_host_rsa_key ] || ssh-keygen -A"]
+exec = "sshd -D"

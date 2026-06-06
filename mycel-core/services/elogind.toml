@@ -1,0 +1,6 @@
+name = "elogind"
+kind = "longrun"
+needs = ["dbus"]
+bundles = ["core"]
+
+exec = "/usr/lib/elogind/elogind"

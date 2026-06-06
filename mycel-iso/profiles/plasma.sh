@@ -39,6 +39,12 @@ install_de_packages() {
     for pkg in firefox; do
         fetch_arch_pkg "$pkg"
     done
+
+    # VM guest integration — clipboard sharing + auto-resize under SPICE/QEMU.
+    # spice-vdagent ships an /etc/xdg/autostart entry, so Plasma starts it.
+    for pkg in spice-vdagent; do
+        fetch_arch_pkg "$pkg"
+    done
 }
 
 profile_desktop_section() {

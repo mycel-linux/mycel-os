@@ -15,14 +15,29 @@ if [ ! -e /sys/fs/cgroup/cgroup.controllers ]; then
 fi
 
 # machine-id — dbus refuses to spawn a (session) bus without it: "Cannot spawn
-# a message bus without a machine-id". That single missing file breaks the
-# entire desktop session. Generate one on the live system if it's absent.
-if [ ! -s /etc/machine-id ]; then
+# a message bus without a machine-id". Generate one if it's absent OR the
+# placeholder "uninitialized" (which the installer writes so each install gets
+# a unique id on first boot — without this, the installed system would inherit
+# an invalid machine-id and dbus would break).
+_mid=$(cat /etc/machine-id 2>/dev/null)
+if [ ! -s /etc/machine-id ] || [ "$_mid" = "uninitialized" ]; then
+    rm -f /etc/machine-id
     dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null \
         || dbus-uuidgen 2>/dev/null > /etc/machine-id
 fi
 mkdir -p /var/lib/dbus
 ln -sf /etc/machine-id /var/lib/dbus/machine-id
+
+# Re-expose the live squashfs at a stable, reachable path for the installer.
+# s6-linux-init's fresh /run tmpfs shadows dracut's mounts, so the squashfs at
+# /run/rootfsbase is unreachable — but its loop device is still listed in
+# /proc/mounts, so we just mount that device again at a clean path. On an
+# installed (non-live) system there's no squashfs, so this is a harmless no-op.
+_sqfs_dev=$(awk '$3=="squashfs"{print $1; exit}' /proc/mounts 2>/dev/null)
+if [ -n "$_sqfs_dev" ]; then
+    mkdir -p /run/mycelos/squashfs
+    mount -o ro "$_sqfs_dev" /run/mycelos/squashfs 2>/dev/null || true
+fi
 
 # tmpfiles that systemd-tmpfiles would normally create. Without /tmp/.X11-unix
 # Xwayland can't make its socket and kwin tears the whole session down:

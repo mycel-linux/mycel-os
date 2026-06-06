@@ -1,0 +1,5 @@
+name = "core"
+kind = "bundle"
+# Members declare `bundles = ["core"]` themselves; the composer folds them in.
+# core is itself a member of the default bundle.
+bundles = ["default"]

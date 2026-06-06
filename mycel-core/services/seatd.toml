@@ -1,0 +1,6 @@
+name = "seatd"
+kind = "longrun"
+needs = ["udev-trigger"]
+bundles = ["core"]
+
+exec = "seatd -g seat"

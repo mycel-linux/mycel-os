@@ -1,14 +1,21 @@
-#!/bin/sh
+name = "autologin"
+kind = "longrun"
+needs = ["wireplumber", "seatd", "elogind"]
+bundles = ["core"]
+
 # Auto-login the configured user on tty1 THROUGH PAM (login), so that
 # pam_elogind registers a real logind session and sets up XDG_RUNTIME_DIR.
 # This is required for Plasma/GNOME to work. The actual desktop is launched
 # from the user's login shell by /etc/profile.d/zz-mycel-session.sh, which
 # reads [desktop] environment from /etc/mycel.toml.
 #
-# (s6-setuidgid was deliberately removed here — it bypasses PAM, so no logind
+# (s6-setuidgid is deliberately NOT used here — it bypasses PAM, so no logind
 # session would be created and Plasma would come up to a blank screen.)
+run = '''
+#!/bin/sh
 username=$(awk -F'"' '/^\[\[users\]\]/{f=1} f && /^name/{print $2; exit}' \
     /etc/mycel.toml 2>/dev/null)
 username="${username:-live}"
 
 exec /usr/bin/agetty --autologin "$username" --noclear tty1 linux
+'''

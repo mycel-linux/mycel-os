@@ -1,10 +1,10 @@
 import libcalamares
 import os
-import subprocess
+import glob
 import shutil
+import subprocess
 
-# kernel and initramfs live on the root partition, not the EFI partition,
-# so we use root() not boot() to address them from Limine.
+# kernel + initramfs live on the root partition (root() in Limine terms).
 LIMINE_CONF = """\
 timeout: 3
 
@@ -16,66 +16,103 @@ timeout: 3
 """
 
 
-def _root_uuid(gs):
-    """Return the UUID of the partition mounted at /."""
-    partitions = gs.value("partitions") or []
-    for p in partitions:
-        if p.get("mountPoint") == "/":
+def _gs():
+    return libcalamares.globalStorage
+
+
+def _partitions():
+    return _gs().value("partitions") or []
+
+
+def _uuid_for(mountpoint):
+    for p in _partitions():
+        if p.get("mountPoint") == mountpoint:
             return p.get("uuid", "")
     return ""
 
 
+def _device_for(mountpoint):
+    for p in _partitions():
+        if p.get("mountPoint") == mountpoint:
+            return p.get("device", "")
+    return ""
+
+
+def _chroot(root, args):
+    """Run a command inside the target system."""
+    return subprocess.run(["chroot", root] + args, check=False)
+
+
 def run():
-    gs   = libcalamares.globalStorage
+    gs   = _gs()
     root = gs.value("rootMountPoint") or "/mnt"
 
-    root_uuid = _root_uuid(gs)
+    root_uuid = _uuid_for("/")
     if not root_uuid:
-        return ("Could not find root partition UUID", "Limine installer cannot continue.")
+        return ("Bootloader", "Could not find the root partition UUID.")
 
-    conf = LIMINE_CONF.format(root_uuid=root_uuid)
+    # ── kernel + initramfs ────────────────────────────────────────────────────
+    # The squashfs excludes /boot, and the live initramfs is dmsquash-live (wrong
+    # for a disk boot). So: copy the kernel out of the modules dir and generate a
+    # fresh, normal initramfs for the installed system via dracut in the chroot.
+    os.makedirs(os.path.join(root, "boot"), exist_ok=True)
 
-    boot_dir = os.path.join(root, "boot")
-    os.makedirs(boot_dir, exist_ok=True)
+    modules_dir = os.path.join(root, "usr/lib/modules")
+    kvers = sorted(os.listdir(modules_dir)) if os.path.isdir(modules_dir) else []
+    if not kvers:
+        return ("Bootloader", "No kernel modules found in the target.")
+    kver = kvers[-1]
 
-    conf_path = os.path.join(boot_dir, "limine.conf")
-    with open(conf_path, "w") as f:
-        f.write(conf)
+    vmlinuz = os.path.join(modules_dir, kver, "vmlinuz")
+    if os.path.exists(vmlinuz):
+        shutil.copy(vmlinuz, os.path.join(root, "boot", "vmlinuz"))
+    else:
+        return ("Bootloader", "vmlinuz not found in the target modules dir.")
 
-    # Install Limine EFI binary to the fallback EFI path so firmware finds it
-    # without a registered boot entry, then also register a named entry.
-    efi_limine = os.path.join(root, "boot", "efi", "EFI", "limine")
-    efi_boot   = os.path.join(root, "boot", "efi", "EFI", "BOOT")
-    os.makedirs(efi_limine, exist_ok=True)
-    os.makedirs(efi_boot,   exist_ok=True)
+    # depmod + a normal (non-live) initramfs inside the target
+    _chroot(root, ["depmod", kver])
+    _chroot(root, [
+        "dracut", "--force", "--no-hostonly",
+        "--omit", "dmsquash-live",
+        "--kver", kver, "/boot/initramfs.img",
+    ])
 
-    for fname in ["BOOTX64.EFI", "limine-uefi-cd.bin"]:
-        src = f"/usr/share/limine/{fname}"
-        if os.path.exists(src):
-            shutil.copy(src, efi_limine)
+    # ── limine.conf ───────────────────────────────────────────────────────────
+    with open(os.path.join(root, "boot", "limine.conf"), "w") as f:
+        f.write(LIMINE_CONF.format(root_uuid=root_uuid))
 
-    # Copy BOOTX64.EFI to the fallback path so the system boots without nvram
-    bootx64 = os.path.join(efi_limine, "BOOTX64.EFI")
-    if os.path.exists(bootx64):
-        shutil.copy(bootx64, os.path.join(efi_boot, "BOOTX64.EFI"))
+    # ── install limine (UEFI and/or BIOS) ─────────────────────────────────────
+    # Limine data files live in the target's /usr/share/limine.
+    limine_share = os.path.join(root, "usr/share/limine")
+    efi_dev = _device_for("/boot/efi")
 
-    # Register a named EFI boot entry (best-effort — may not work in all VMs)
-    partitions = gs.value("partitions") or []
-    efi_part   = next((p for p in partitions if p.get("mountPoint") == "/boot/efi"), None)
-    if efi_part:
-        disk  = efi_part.get("device", "")[:-1]   # strip partition number
-        partnum = efi_part.get("device", "")[-1]
-        subprocess.run(
-            ["efibootmgr", "--create", "--disk", disk, "--part", partnum,
-             "--label", "MycelOS", "--loader", "\\EFI\\limine\\BOOTX64.EFI"],
-            check=False,
-        )
+    if efi_dev:
+        efi_limine = os.path.join(root, "boot/efi/EFI/limine")
+        efi_boot   = os.path.join(root, "boot/efi/EFI/BOOT")
+        os.makedirs(efi_limine, exist_ok=True)
+        os.makedirs(efi_boot,   exist_ok=True)
 
-    # BIOS fallback — install Limine to the MBR/VBR of the disk
-    if efi_part is None:
-        root_part = next((p for p in partitions if p.get("mountPoint") == "/"), None)
-        if root_part:
-            disk = root_part.get("device", "")[:-1]
-            subprocess.run(["limine", "bios-install", disk], check=False)
+        bootx64 = os.path.join(limine_share, "BOOTX64.EFI")
+        if os.path.exists(bootx64):
+            shutil.copy(bootx64, os.path.join(efi_limine, "BOOTX64.EFI"))
+            # Fallback path so it boots even without an NVRAM entry
+            shutil.copy(bootx64, os.path.join(efi_boot, "BOOTX64.EFI"))
+
+        # Register an NVRAM entry (best-effort; harmless if it fails in a VM)
+        disk   = efi_dev.rstrip("0123456789").rstrip("p")
+        partnum = "".join(c for c in efi_dev if c.isdigit())[-1:] or "1"
+        _chroot(root, [
+            "efibootmgr", "--create", "--disk", disk, "--part", partnum,
+            "--label", "MycelOS", "--loader", "\\EFI\\limine\\BOOTX64.EFI",
+        ])
+    else:
+        # BIOS install onto the disk holding root
+        root_dev = _device_for("/")
+        disk = root_dev.rstrip("0123456789").rstrip("p")
+        # limine bios-install needs limine-bios.sys reachable on the partition
+        bios_sys = os.path.join(limine_share, "limine-bios.sys")
+        if os.path.exists(bios_sys):
+            shutil.copy(bios_sys, os.path.join(root, "boot", "limine-bios.sys"))
+        _chroot(root, ["limine", "bios-install", disk])
 
     return None

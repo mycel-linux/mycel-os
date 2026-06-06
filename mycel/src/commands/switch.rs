@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashSet;
@@ -94,7 +94,14 @@ pub fn run() -> Result<()> {
         sync_user(user)?;
     }
 
-    // ── 8. Hot-swap s6 services ───────────────────────────────────────────────
+    // ── 8. Recompose service definitions + hot-swap s6 services ───────────────
+    // Re-weave the s6-rc database from the declarative service .toml files and
+    // live-migrate the running tree to it. Non-fatal: on failure the live
+    // services stay on the previous database, so we still apply the enable list.
+    pb.set_message("recomposing services...");
+    if let Err(e) = recompose_services() {
+        eprintln!("  {} {}", "!!".yellow(), e);
+    }
     pb.set_message("reloading services...");
     reload_services(&config.services.enable)?;
 
@@ -346,11 +353,137 @@ fn apply_kernel_profile(profile: &str) {
     }
 }
 
-const S6_RC_LIVE: &str = "/run/s6-rc";
-const S6_RC_DB:   &str = "/etc/s6-rc/compiled";
+const S6_RC_LIVE:    &str = "/run/s6-rc";
+const S6_RC_DB:      &str = "/etc/s6-rc/compiled";
+const S6_RC_SOURCE:  &str = "/etc/s6-rc/source";
+const SERVICES_DIR:  &str = "/etc/mycel/services";
 
 // Core services that must always remain up — never brought down by switch.
 const ALWAYS_UP: &[&str] = &["udevd", "dbus", "seatd", "pipewire", "wireplumber"];
+
+/// Re-weave the s6-rc database from the declarative service definitions in
+/// /etc/mycel/services and live-migrate the running supervision tree to it.
+///
+/// This is what lets a user edit a service `.toml` and have the change take
+/// effect *gracefully*: mycel-compose regenerates the s6-rc source, s6-rc-compile
+/// builds a fresh database, and s6-rc-update diffs it against the live state —
+/// restarting only the services whose definition actually changed, starting new
+/// ones, stopping removed ones, all in dependency order, and leaving everything
+/// else running untouched. No reboot, no stop-the-world.
+fn recompose_services() -> Result<()> {
+    use std::path::Path;
+
+    // No declarations on this system (e.g. the live ISO) → nothing to recompose.
+    if !Path::new(SERVICES_DIR).exists() {
+        return Ok(());
+    }
+    // No composer installed → leave the build-time database as-is.
+    let composer = ["/usr/bin/mycel-compose", "/usr/local/bin/mycel-compose"]
+        .into_iter()
+        .find(|p| Path::new(p).exists());
+    let composer = match composer {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+
+    // 1. Regenerate the s6-rc source tree from the declarations.
+    let ok = Command::new(composer)
+        .args(["--services", SERVICES_DIR, "--out", S6_RC_SOURCE])
+        .status()
+        .context("running mycel-compose")?
+        .success();
+    if !ok {
+        bail!("mycel-compose failed — service definitions left unchanged");
+    }
+
+    // 2. Compile a fresh database beside the live one.
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let new_db = format!("/etc/s6-rc/compiled-{stamp}");
+    let _ = fs::remove_dir_all(&new_db); // guard against a same-second retry
+    let ok = Command::new("s6-rc-compile")
+        .args([new_db.as_str(), S6_RC_SOURCE])
+        .status()
+        .context("running s6-rc-compile")?
+        .success();
+    if !ok {
+        bail!("s6-rc-compile failed — service definitions left unchanged");
+    }
+
+    // 3. If the supervision tree is live, migrate it gracefully. If it isn't
+    //    (e.g. switch run from the installer chroot), skip — the new database is
+    //    picked up at next boot via the symlink repointed below.
+    if Path::new(S6_RC_LIVE).exists() {
+        let ok = Command::new("s6-rc-update")
+            .args(["-l", S6_RC_LIVE, new_db.as_str()])
+            .status()
+            .context("running s6-rc-update")?
+            .success();
+        if !ok {
+            // Live tree is still on the old database; don't repoint anything.
+            let _ = fs::remove_dir_all(&new_db);
+            bail!("s6-rc-update failed — live services left on the previous database");
+        }
+    }
+
+    // 4. Make /etc/s6-rc/compiled point at the new database so it survives a
+    //    reboot, keeping previous databases for rollback.
+    repoint_compiled_db(&new_db)?;
+    Ok(())
+}
+
+/// Point the `/etc/s6-rc/compiled` symlink at `new_db`, then prune stale
+/// compiled databases. The build-time layout has a real directory there; the
+/// first switch retires it to `compiled-initial` (a known-good fallback) and
+/// converts the path to a symlink, which every later switch swaps atomically.
+fn repoint_compiled_db(new_db: &str) -> Result<()> {
+    use std::path::Path;
+    let link = Path::new(S6_RC_DB);
+
+    // Retire a real build-time directory once, so the path can become a symlink.
+    if link.exists() && !link.is_symlink() && link.is_dir() {
+        let retired = format!("{S6_RC_DB}-initial");
+        let _ = fs::remove_dir_all(&retired);
+        fs::rename(link, &retired).context("retiring build-time compiled db")?;
+    }
+
+    // Atomic symlink swap: create a temp link, rename it over the target.
+    let tmp = format!("{S6_RC_DB}.next");
+    let _ = fs::remove_file(&tmp);
+    std::os::unix::fs::symlink(new_db, &tmp).context("staging compiled-db symlink")?;
+    fs::rename(&tmp, link).context("activating compiled-db symlink")?;
+
+    prune_compiled_dbs(new_db);
+    Ok(())
+}
+
+/// Keep the active timestamped database plus the two most recent previous ones
+/// (for rollback); remove older `compiled-<digits>` databases. `compiled-initial`
+/// is left alone as the ultimate fallback.
+fn prune_compiled_dbs(keep: &str) {
+    let mut dbs: Vec<(u64, std::path::PathBuf)> = match fs::read_dir("/etc/s6-rc") {
+        Ok(rd) => rd
+            .flatten()
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().into_owned();
+                name.strip_prefix("compiled-")
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .map(|ts| (ts, e.path()))
+            })
+            .collect(),
+        Err(_) => return,
+    };
+    dbs.sort_by(|a, b| b.0.cmp(&a.0)); // newest first
+
+    let keep_path = std::path::Path::new(keep);
+    for (_, path) in dbs.into_iter().skip(3) {
+        if path != keep_path {
+            let _ = fs::remove_dir_all(&path);
+        }
+    }
+}
 
 fn reload_services(desired: &[String]) -> Result<()> {
     // s6-rc live state doesn't exist until rc.init has run at boot.
